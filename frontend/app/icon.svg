@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 90" role="img" aria-label="WHOT">
+  <rect width="64" height="90" rx="7" fill="#d9c89a"/>
+  <rect x="4" y="4" width="56" height="82" rx="5" fill="#7a1420"/>
+  <defs>
+    <pattern id="hatch" width="10" height="10" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+      <rect width="10" height="10" fill="#6a1018"/>
+      <rect width="5" height="10" fill="#8d1a28"/>
+    </pattern>
+  </defs>
+  <rect x="4" y="4" width="56" height="82" rx="5" fill="url(#hatch)" opacity="0.9"/>
+  <rect x="14" y="36" width="36" height="18" fill="#efe6d4" stroke="#1c1712" stroke-width="1.2"/>
+  <text x="32" y="49" text-anchor="middle" font-family="Georgia, 'Times New Roman', serif" font-size="9" font-weight="800" letter-spacing="1.2" fill="#1c1712">WHOT</text>
+</svg>
