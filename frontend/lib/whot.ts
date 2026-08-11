@@ -1,4 +1,4 @@
-/** Byte-identical mirror of `contracts/contracts/WhotCards.sol`. */
+/** Same catalog as WhotCards.sol — keep them in lockstep. */
 
 export const CIRCLE = 1;
 export const TRIANGLE = 2;
