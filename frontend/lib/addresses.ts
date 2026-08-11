@@ -1,6 +1,6 @@
 import type { Address } from "viem";
 
-/** Live Base Sepolia WHOT table. */
+/** Live table on Base Sepolia. */
 const LIVE = "0x3f1d79bfbb2737e5dff849c0948d576efa5579ca" as Address;
 const RETIRED = [
   "0x9a603f5f63cdb743f655969c2d6463c65a938fba",
