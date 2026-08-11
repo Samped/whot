@@ -197,7 +197,7 @@ export function useWhot(tableId: number) {
       if (needSession) await ensureIncoSession(walletClient);
       return walletClient;
     }
-    setStatus("Opening your table session…");
+    setStatus("Opening the table…");
     const session = await gameAccount.ensureReady(dealFee + 1_000_000_000_000_000n);
     fundedRef.current = true;
     if (needSession) {
