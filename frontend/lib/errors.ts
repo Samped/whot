@@ -57,11 +57,11 @@ export function friendlyError(err: unknown): string {
   }
 
   if (/out of gas|ran out of gas/i.test(raw)) {
-    return "Computer needed more room to pick. Tap nudge once.";
+    return "Computer needed more room to pick. Try the dump again.";
   }
 
   if (/computer pick reverted|computer dump reverted/i.test(raw)) {
-    return "Computer could not dump that card. Tap nudge once.";
+    return "Computer could not dump that card. Try the dump again.";
   }
 
   if (/revert|reverted|execution/i.test(raw)) {
