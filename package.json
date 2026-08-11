@@ -2,6 +2,7 @@
   "name": "whot",
   "version": "0.1.0",
   "private": true,
+  "description": "Nigerian WHOT. Sealed hands on Base Sepolia.",
   "workspaces": [
     "contracts",
     "frontend"
