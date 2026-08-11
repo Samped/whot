@@ -9,7 +9,7 @@ const Home = () => {
       </Suspense>
       <footer className="site-footer">
         <div className="site-footer-inner">
-          <span>Hands stay sealed until played. Base Sepolia.</span>
+          <span>Hands stay sealed until dumped. Base Sepolia.</span>
           <a href="https://docs.inco.org" target="_blank" rel="noreferrer">
             Inco Lightning
           </a>
