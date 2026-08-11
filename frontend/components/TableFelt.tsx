@@ -245,7 +245,7 @@ export function TableFelt({
             <span className="open-label">
               {pile
                 ? `Open · ${pile.rank === 20 ? "WHOT" : pile.rank} ${SHAPE_NAME[pile.shape] || ""}`
-                : "Locking opener…"}
+                : "Opening the pile…"}
             </span>
             {lastCall ? <span className="call-chip">{lastCall}</span> : null}
           </div>
