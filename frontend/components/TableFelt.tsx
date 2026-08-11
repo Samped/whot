@@ -1,0 +1,324 @@
+"use client";
+
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { CardSlot, ShapeGlyph, WhotBack, WhotFace } from "@/components/WhotCard";
+import { isLegal, SHAPE_NAME, type WhotCard } from "@/lib/whot";
+import type { LastPlay } from "@/hooks/useWhot";
+
+const SHAPES = [1, 2, 3, 4, 5] as const;
+const FLY_MS = 420;
+
+type Box = { x: number; y: number; w: number; h: number };
+type Flyer = { key: number; who: "me" | "opp"; card: WhotCard; from: Box; to: Box };
+
+function reducedMotion() {
+  return typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+}
+
+function boxOf(el: Element | null): Box | null {
+  if (!el) return null;
+  const r = el.getBoundingClientRect();
+  if (r.width < 8 || r.height < 8) return null;
+  return { x: r.left, y: r.top, w: r.width, h: r.height };
+}
+
+function fallbackBox(who: "me" | "opp", to: Box): Box {
+  const w = 118;
+  const h = 168;
+  return {
+    x: to.x + (to.w - w) / 2,
+    y: who === "me" ? to.y + 220 : to.y - 200,
+    w,
+    h,
+  };
+}
+
+function FlyCard({ flyer, onDone }: { flyer: Flyer; onDone: () => void }) {
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const { from, to } = flyer;
+    const dx = to.x - from.x;
+    const dy = to.y - from.y;
+    const sx = to.w / from.w;
+    const sy = to.h / from.h;
+    el.style.transform = "translate3d(0,0,0) scale(1)";
+    el.style.transition = "none";
+    const start = requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        el.style.transition = `transform ${FLY_MS}ms cubic-bezier(0.22, 1, 0.36, 1)`;
+        el.style.transform = `translate3d(${dx}px, ${dy}px, 0) scale(${sx}, ${sy})`;
+      });
+    });
+    const done = window.setTimeout(onDone, FLY_MS + 20);
+    return () => {
+      cancelAnimationFrame(start);
+      window.clearTimeout(done);
+    };
+  }, [flyer.key]);
+
+  return (
+    <div
+      ref={ref}
+      className="fly-card"
+      style={{ left: flyer.from.x, top: flyer.from.y, width: flyer.from.w, height: flyer.from.h }}
+      aria-hidden
+    >
+      <WhotFace card={flyer.card} size="lg" />
+    </div>
+  );
+}
+
+export function TableFelt({
+  opponentName,
+  opponentCount,
+  myCards,
+  myTurn,
+  live,
+  top,
+  calledShape,
+  pendingPick,
+  pendingKind,
+  marketLeft,
+  lastCall,
+  lastPlayed,
+  banner,
+  busy,
+  peeking,
+  onPlay,
+  onMarket,
+  footer,
+}: {
+  opponentName: string;
+  opponentCount: number;
+  myCards: WhotCard[];
+  myTurn: boolean;
+  live: boolean;
+  top: WhotCard | null;
+  calledShape: number;
+  pendingPick: number;
+  pendingKind: number;
+  marketLeft: number;
+  lastCall?: string;
+  lastPlayed?: LastPlay | null;
+  banner: string;
+  busy?: boolean;
+  peeking?: boolean;
+  onPlay: (index: number, nextShape: number) => void;
+  onMarket: () => void;
+  footer?: ReactNode;
+}) {
+  const pileRef = useRef<HTMLDivElement>(null);
+  const oppRef = useRef<HTMLDivElement>(null);
+  const slotRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const queue = useRef<Flyer[]>([]);
+
+  const [pickShapeFor, setPickShapeFor] = useState<number | null>(null);
+  const [heldTop, setHeldTop] = useState<WhotCard | null>(top);
+  const [hideMine, setHideMine] = useState<number | null>(null);
+  const [flyer, setFlyer] = useState<Flyer | null>(null);
+  const [seatTick, setSeatTick] = useState(0);
+
+  useEffect(() => {
+    if (!top) return;
+    setHeldTop((cur) => {
+      if (flyer) return cur;
+      if (cur && lastPlayed?.card && cur.id === lastPlayed.card.id && top.id !== cur.id) return cur;
+      return top;
+    });
+  }, [top?.id, lastPlayed?.card?.id, flyer]);
+
+  function pileBox() {
+    return boxOf(pileRef.current?.querySelector(".wc") ?? pileRef.current);
+  }
+
+  function enqueue(next: Flyer) {
+    if (flyer) {
+      queue.current.push(next);
+      return;
+    }
+    setFlyer(next);
+  }
+
+  function launch(who: "me" | "opp", card: WhotCard, fromEl: Element | null) {
+    if (reducedMotion()) {
+      setHeldTop(card);
+      setHideMine(null);
+      return;
+    }
+    const to = pileBox();
+    if (!to) {
+      setHeldTop(card);
+      setHideMine(null);
+      return;
+    }
+    enqueue({
+      key: Date.now() + Math.random(),
+      who,
+      card,
+      from: boxOf(fromEl) ?? fallbackBox(who, to),
+      to,
+    });
+  }
+
+  function finishFly() {
+    if (flyer) setHeldTop(flyer.card);
+    setSeatTick((n) => n + 1);
+    const next = queue.current.shift() ?? null;
+    setFlyer(next);
+    if (!next) setHideMine(null);
+  }
+
+  useEffect(() => {
+    if (!lastPlayed || lastPlayed.who !== "opp" || !lastPlayed.card) return;
+    if (heldTop?.id === lastPlayed.card.id) return;
+    launch("opp", lastPlayed.card, oppRef.current?.querySelector(".wc") ?? oppRef.current);
+  }, [lastPlayed?.key]);
+
+  function runMine(index: number, nextShape: number, card: WhotCard) {
+    setHideMine(index);
+    launch("me", card, slotRefs.current[index]?.querySelector(".wc") ?? slotRefs.current[index]);
+    onPlay(index, nextShape);
+  }
+
+  function clickCard(index: number) {
+    const card = myCards[index];
+    if (!card || !myTurn || !live || busy || hideMine !== null || flyer) return;
+    if (!isLegal(card, heldTop ?? top, calledShape, pendingKind)) return;
+    if (card.rank === 20) {
+      setPickShapeFor(index);
+      return;
+    }
+    runMine(index, 0, card);
+  }
+
+  const mid = (myCards.length - 1) / 2;
+  const shownBacks = Math.min(opponentCount, 12);
+  const shapeName = SHAPE_NAME[calledShape] || "any";
+  const pile = heldTop ?? top;
+
+  return (
+    <div className="felt-wrap">
+      <div className="seat-rail opp">
+        <div className="seat-chip">
+          <span className="avatar opp" />
+          <div>
+            <strong>{opponentName}</strong>
+            <em>{opponentCount} sealed</em>
+          </div>
+        </div>
+        <div className="fan opp-fan" ref={oppRef}>
+          {Array.from({ length: shownBacks }, (_, i) => (
+            <CardSlot key={i} overlap={i === 0 ? 0 : -38} z={i} tilt={(i - (shownBacks - 1) / 2) * 5}>
+              <WhotBack i={i} size="sm" />
+            </CardSlot>
+          ))}
+        </div>
+      </div>
+
+      <div className="table-stage">
+        <div className="felt">
+          <div className="felt-grain" />
+          <div className="pile market-stack">
+            <div className="stack">
+              <WhotBack size="md" style={{ transform: "rotate(-10deg) translate(-8px, 6px)" }} />
+              <WhotBack size="md" style={{ transform: "rotate(-4deg) translate(-2px, 2px)" }} />
+              <WhotBack size="md" />
+            </div>
+            <span>market · {marketLeft}</span>
+          </div>
+
+          <div className={`follow-chip s-${shapeName}`}>
+            <ShapeGlyph shape={calledShape || 1} />
+            <div>
+              <b>Follow {shapeName}</b>
+              {pendingKind ? <em>pay pick {pendingPick}</em> : <em>shape or number</em>}
+            </div>
+          </div>
+
+          <div className="pile discard open-pile" ref={pileRef}>
+            <div key={seatTick} className={seatTick ? "pile-face is-seat" : "pile-face"}>
+              {pile ? <WhotFace card={pile} size="xl" /> : <WhotBack size="xl" />}
+            </div>
+            <span className="open-label">
+              {pile
+                ? `Open · ${pile.rank === 20 ? "WHOT" : pile.rank} ${SHAPE_NAME[pile.shape] || ""}`
+                : "Locking opener…"}
+            </span>
+            {lastCall ? <span className="call-chip">{lastCall}</span> : null}
+          </div>
+        </div>
+      </div>
+
+      <p className={`turn-line ${myTurn ? "mine" : ""}`}>{banner}</p>
+
+      <div className="seat-rail me">
+        {peeking && <p className="hint center">Opening your sealed hand…</p>}
+        <div className="fan my-fan">
+          {myCards.map((card, i) => {
+            if (hideMine === i) return <span key={`gone-${i}`} className="wc-ghost" />;
+            const ok =
+              myTurn && live && !busy && hideMine === null && !flyer && isLegal(card, heldTop ?? top, calledShape, pendingKind);
+            return (
+              <CardSlot
+                key={`${card.id}-${i}`}
+                overlap={i === 0 ? 0 : -52}
+                z={i}
+                tilt={(i - mid) * 5.5}
+                lift={Math.abs(i - mid) * 6}
+                slotRef={(node) => {
+                  slotRefs.current[i] = node;
+                }}
+              >
+                <WhotFace card={card} size="lg" playable={ok} dim={!ok} onClick={() => clickCard(i)} />
+              </CardSlot>
+            );
+          })}
+        </div>
+        <div className="hand-bar">
+          <button
+            className="btn market"
+            disabled={!myTurn || busy || !live || hideMine !== null || Boolean(flyer)}
+            onClick={onMarket}
+          >
+            {pendingPick ? `Pay pick ${pendingPick}` : "Go market"}
+          </button>
+          {footer}
+        </div>
+      </div>
+
+      {flyer ? <FlyCard flyer={flyer} onDone={finishFly} /> : null}
+
+      {pickShapeFor !== null && (
+        <div className="modal">
+          <div className="sheet">
+            <p className="sheet-kicker">WHOT</p>
+            <h3>Call a shape</h3>
+            <div className="shape-grid">
+              {SHAPES.map((s) => (
+                <button
+                  key={s}
+                  className={`shape-pick s-${SHAPE_NAME[s]}`}
+                  onClick={() => {
+                    const idx = pickShapeFor;
+                    const card = myCards[idx];
+                    setPickShapeFor(null);
+                    if (card) runMine(idx, s, card);
+                  }}
+                >
+                  <ShapeGlyph shape={s} />
+                  {SHAPE_NAME[s]}
+                </button>
+              ))}
+            </div>
+            <button className="btn ghost" onClick={() => setPickShapeFor(null)}>
+              cancel
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
