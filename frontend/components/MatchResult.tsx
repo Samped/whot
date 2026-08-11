@@ -112,7 +112,7 @@ export function MatchResult({
         <h2 id="result-title">{won ? "Congratulations" : "Hard luck"}</h2>
         <p>
           {won
-            ? "You emptied the hand. The table is yours."
+            ? "You emptied the hand. The hand is yours."
             : solo
               ? "The computer emptied first. Sit again when you are ready."
               : "They emptied first. Rematch when you want it."}
