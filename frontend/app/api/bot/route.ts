@@ -63,7 +63,11 @@ function playedFromReceipt(logs: { data: Hex; topics: Hex[] }[]) {
   let call = "Computer";
   for (const log of logs) {
     try {
-      const parsed = decodeEventLog({ abi: whotAbi, data: log.data, topics: log.topics });
+      const parsed = decodeEventLog({
+        abi: whotAbi,
+        data: log.data,
+        topics: log.topics as [Hex, ...Hex[]],
+      });
       if (parsed.eventName === "CardPlayed") {
         card = Number((parsed.args as { card?: bigint | number }).card || 0);
         call = String((parsed.args as { call?: string }).call || "Computer");
@@ -145,7 +149,7 @@ async function loadHand(id: number, force = false): Promise<HandCache | null> {
     }
 
     const lightning = await zap();
-    const revealed = (await lightning.attestedDecrypt(clients.wallet, handles, {
+    const revealed = (await lightning.attestedDecrypt(clients.wallet as never, handles, {
       backoffConfig: { maxRetries: 6, baseDelayInMs: 80, backoffFactor: 1.15 },
     })) as CachedCard["att"][];
 
