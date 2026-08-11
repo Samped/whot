@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { createPortal } from "react-dom";
-import { useIsInitialized, useSignInWithEmail, useVerifyEmailOTP } from "@coinbase/cdp-hooks";
+import { useSignInWithEmail, useVerifyEmailOTP } from "@coinbase/cdp-hooks";
 import { useGameAccount } from "@/hooks/useGameAccount";
 
 function errText(err: unknown) {
@@ -33,7 +33,6 @@ function readField(form: HTMLFormElement, name: string) {
 }
 
 export function EmailSignIn() {
-  const { isInitialized } = useIsInitialized();
   const { signInWithEmail: sendCode } = useSignInWithEmail();
   const { verifyEmailOTP } = useVerifyEmailOTP();
   const { signInWithEmail, signedIn, loginOpen, closeLogin } = useGameAccount();
@@ -62,10 +61,6 @@ export function EmailSignIn() {
     const address = readField(e.currentTarget, "email").toLowerCase();
     if (!address || !address.includes("@")) {
       setError("Type the full email address.");
-      return;
-    }
-    if (!isInitialized) {
-      setError("Hold on — the mail door is still opening.");
       return;
     }
     setEmail(address);
@@ -143,8 +138,8 @@ export function EmailSignIn() {
               />
             </label>
             {error ? <p className="mail-err">{error}</p> : null}
-            <button className="btn primary" type="submit" disabled={busy || !isInitialized}>
-              {busy ? "Sending…" : isInitialized ? "Send a code" : "Opening mail…"}
+            <button className="btn primary" type="submit" disabled={busy}>
+              {busy ? "Sending…" : "Send a code"}
             </button>
             <button className="btn ghost" type="button" onClick={close}>
               cancel
