@@ -42,3 +42,7 @@ npm run contracts:deploy:testnet
 ```
 
 Paste the printed address into `frontend/.env` as `NEXT_PUBLIC_WHOT_ADDRESS`.
+
+## License
+
+MIT. See `LICENSE`.
