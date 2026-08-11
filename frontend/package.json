@@ -1,7 +1,7 @@
 {
   "name": "frontend",
   "version": "1.0.0",
-  "description": "A Next.js dApp built on Ethereum with RainbowKit",
+  "description": "WHOT table on Base Sepolia",
   "main": "index.js",
   "author": "",
   "license": "MIT",
