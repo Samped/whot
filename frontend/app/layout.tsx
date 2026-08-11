@@ -7,7 +7,7 @@ import { Header } from "@/components/Header";
 import { Toaster } from "sonner";
 
 export const metadata: Metadata = {
-  title: "WHOT — sit down",
+  title: "WHOT",
   description:
     "Nigerian WHOT. Play the computer now, or host a table and send the number to a friend.",
 };
