@@ -137,7 +137,7 @@ function Home({ onBoard }: { onBoard: () => void }) {
               disabled={startingSolo || hosting || game.busy}
               onClick={() => void playComputer()}
             >
-              {startingSolo || game.busy ? game.status || "Sealing the pack…" : "Play the computer"}
+              {startingSolo || game.busy ? game.status || "Shuffling…" : "Play the computer"}
             </button>
           </div>
           <div className="suit-row" aria-hidden>
