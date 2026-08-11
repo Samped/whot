@@ -92,7 +92,7 @@ const Header = () => {
     <header className="site-header">
       <div className="site-header-inner">
         <div className="header-left">
-          <Link href="/" className="brand" aria-label="WHOT">
+          <Link href="/" className="brand" aria-label="WHOT home" title="WHOT">
             <WhotBack size="logo" i={2} />
           </Link>
           <Suspense fallback={null}>
