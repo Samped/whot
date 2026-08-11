@@ -3,7 +3,7 @@ import { WhotGame } from "@/components/WhotGame";
 
 const Home = () => {
   return (
-    <main>
+    <main className="site-main">
       <Suspense fallback={<div className="app-shell">Dealing…</div>}>
         <WhotGame />
       </Suspense>

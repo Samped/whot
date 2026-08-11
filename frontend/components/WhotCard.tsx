@@ -155,6 +155,7 @@ export function CardSlot({
   lift = 0,
   overlap = 0,
   z = 0,
+  up = false,
   slotRef,
 }: {
   children: ReactNode;
@@ -162,15 +163,16 @@ export function CardSlot({
   lift?: number;
   overlap?: number;
   z?: number;
+  up?: boolean;
   slotRef?: (node: HTMLDivElement | null) => void;
 }) {
   return (
     <div
       ref={slotRef}
-      className="wc-slot"
+      className={`wc-slot${up ? " is-up" : ""}`}
       style={{
         marginLeft: overlap,
-        zIndex: z,
+        zIndex: up ? 60 : z,
         ["--tilt" as string]: `${tilt}deg`,
         ["--lift" as string]: `${lift}px`,
       }}

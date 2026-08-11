@@ -126,10 +126,10 @@ function Home({ onBoard }: { onBoard: () => void }) {
           <p className="eyebrow">Nigerian cards · 54 in the pack</p>
           <h1>Sit down.</h1>
           <p className="lede">
-            Sign in with email. Base posts a code to that address, then we
-            open a table session that dumps and decrypts for you — no
-            signature on every card. Hands stay sealed on-chain until a card
-            hits the pile.
+            Hold on. Pick two. General market. Same WHOT — match the pile by
+            shape or number, first empty hand checks up. Your cards sit
+            encrypted on-chain, dark to the room. They only decrypt when you
+            slam one onto the felt.
           </p>
           <div className="actions">
             <button

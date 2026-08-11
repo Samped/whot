@@ -23,14 +23,23 @@ function boxOf(el: Element | null): Box | null {
 }
 
 function fallbackBox(who: "me" | "opp", to: Box): Box {
-  const w = 118;
-  const h = 168;
+  const phone = typeof window !== "undefined" && window.innerWidth < 720;
+  const w = phone ? 78 : 118;
+  const h = phone ? 112 : 168;
   return {
     x: to.x + (to.w - w) / 2,
-    y: who === "me" ? to.y + 220 : to.y - 200,
+    y: who === "me" ? to.y + (phone ? 140 : 220) : to.y - (phone ? 120 : 200),
     w,
     h,
   };
+}
+
+function fanSpread(width: number, cardW: number, count: number) {
+  if (count <= 1) return 0;
+  if (width <= 0 || cardW <= 0) return -40;
+  const peek = Math.min(48, Math.max(34, Math.round(cardW * 0.4)));
+  const margin = (width - count * cardW) / (count - 1);
+  return Math.max(-(cardW - peek), Math.min(8, margin));
 }
 
 function FlyCard({ flyer, onDone }: { flyer: Flyer; onDone: () => void }) {
@@ -112,6 +121,7 @@ export function TableFelt({
 }) {
   const pileRef = useRef<HTMLDivElement>(null);
   const oppRef = useRef<HTMLDivElement>(null);
+  const fanRef = useRef<HTMLDivElement>(null);
   const slotRefs = useRef<(HTMLDivElement | null)[]>([]);
   const queue = useRef<Flyer[]>([]);
 
@@ -120,6 +130,9 @@ export function TableFelt({
   const [hideMine, setHideMine] = useState<number | null>(null);
   const [flyer, setFlyer] = useState<Flyer | null>(null);
   const [seatTick, setSeatTick] = useState(0);
+  const [lifted, setLifted] = useState<number | null>(null);
+  const [coarse, setCoarse] = useState(false);
+  const [fanBox, setFanBox] = useState({ width: 0, cardW: 118 });
 
   useEffect(() => {
     if (!top) return;
@@ -177,7 +190,33 @@ export function TableFelt({
     launch("opp", lastPlayed.card, oppRef.current?.querySelector(".wc") ?? oppRef.current);
   }, [lastPlayed?.key]);
 
+  useEffect(() => {
+    const mq = window.matchMedia("(pointer: coarse)");
+    const sync = () => setCoarse(mq.matches);
+    sync();
+    mq.addEventListener("change", sync);
+    return () => mq.removeEventListener("change", sync);
+  }, []);
+
+  useEffect(() => {
+    const el = fanRef.current;
+    if (!el) return;
+    const measure = () => {
+      const card = el.querySelector(".wc") as HTMLElement | null;
+      setFanBox({ width: el.clientWidth, cardW: card?.offsetWidth || 118 });
+    };
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    measure();
+    return () => ro.disconnect();
+  }, [myCards.length]);
+
+  useEffect(() => {
+    setLifted(null);
+  }, [myCards.length, myTurn]);
+
   function runMine(index: number, nextShape: number, card: WhotCard) {
+    setLifted(null);
     setHideMine(index);
     launch("me", card, slotRefs.current[index]?.querySelector(".wc") ?? slotRefs.current[index]);
     onPlay(index, nextShape);
@@ -187,6 +226,11 @@ export function TableFelt({
     const card = myCards[index];
     if (!card || !myTurn || !live || busy || hideMine !== null || flyer) return;
     if (!isLegal(card, heldTop ?? top, calledShape, pendingKind)) return;
+    const stacked = fanSpread(fanBox.width, fanBox.cardW, myCards.length) < -28;
+    if (coarse && stacked && lifted !== index) {
+      setLifted(index);
+      return;
+    }
     if (card.rank === 20) {
       setPickShapeFor(index);
       return;
@@ -196,6 +240,10 @@ export function TableFelt({
 
   const mid = (myCards.length - 1) / 2;
   const shownBacks = Math.min(opponentCount, 12);
+  const mineSpread = fanSpread(fanBox.width, fanBox.cardW, myCards.length);
+  const tight = fanBox.width > 0 ? fanBox.width < 720 : typeof window !== "undefined" && window.innerWidth < 720;
+  const tiltStep = tight ? 2.1 : 5.5;
+  const liftStep = tight ? 2 : 6;
   const shapeName = SHAPE_NAME[calledShape] || "any";
   const pile = heldTop ?? top;
 
@@ -256,7 +304,7 @@ export function TableFelt({
 
       <div className="seat-rail me">
         {peeking && <p className="hint center">Opening your sealed hand…</p>}
-        <div className="fan my-fan">
+        <div className="fan my-fan" ref={fanRef}>
           {myCards.map((card, i) => {
             if (hideMine === i) return <span key={`gone-${i}`} className="wc-ghost" />;
             const ok =
@@ -264,10 +312,11 @@ export function TableFelt({
             return (
               <CardSlot
                 key={`${card.id}-${i}`}
-                overlap={i === 0 ? 0 : -52}
+                overlap={i === 0 ? 0 : mineSpread}
                 z={i}
-                tilt={(i - mid) * 5.5}
-                lift={Math.abs(i - mid) * 6}
+                tilt={(i - mid) * tiltStep}
+                lift={Math.abs(i - mid) * liftStep}
+                up={lifted === i}
                 slotRef={(node) => {
                   slotRefs.current[i] = node;
                 }}

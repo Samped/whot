@@ -2,82 +2,20 @@
 
 import { useState } from "react";
 import { useSignInWithEmail, useVerifyEmailOTP } from "@coinbase/cdp-hooks";
-import { CDP_PROJECT_ID } from "@/lib/cdp";
 import { useGameAccount } from "@/hooks/useGameAccount";
 
 function cdpMessage(err: unknown) {
   const msg = err instanceof Error ? err.message : "Could not reach Base.";
   if (/cors|origin|allowlist|allowed domain|not allowed/i.test(msg)) {
-    return "Add this origin in CDP Portal → Embedded Wallet → Allowed domains (http://localhost:3000).";
+    return "Base has not opened this site for email yet. Try a wallet, or come back in a bit.";
   }
   if (/project/i.test(msg)) {
-    return "Check NEXT_PUBLIC_CDP_PROJECT_ID. Copy it from portal.cdp.coinbase.com.";
+    return "Base would not take that address just now. Try again in a minute.";
   }
   return msg;
 }
 
-function CdpSetupHint() {
-  const { signedIn, loginOpen, closeLogin } = useGameAccount();
-  const [localOpen, setLocalOpen] = useState(false);
-  const open = localOpen || loginOpen;
-
-  function close() {
-    setLocalOpen(false);
-    closeLogin();
-  }
-
-  return (
-    <>
-      {!signedIn && (
-        <button className="wallet-btn" type="button" onClick={() => setLocalOpen(true)}>
-          <span className="label-full">Email sign in</span>
-          <span className="label-short">Email</span>
-        </button>
-      )}
-      {open && (
-        <div className="modal" role="dialog" aria-modal="true" aria-labelledby="email-sign-title">
-          <div className="sheet">
-            <p className="sheet-kicker">Base email</p>
-            <h3 id="email-sign-title">One key, then codes land in mail</h3>
-            <div className="mail-form">
-              <p>
-                Base sends the sign-in code. This app needs a CDP Project ID so
-                Coinbase will post that letter.
-              </p>
-              <ol className="how-seal">
-                <li>
-                  <strong>Project</strong>
-                  Open{" "}
-                  <a href="https://portal.cdp.coinbase.com" target="_blank" rel="noreferrer">
-                    portal.cdp.coinbase.com
-                  </a>
-                  , copy the Project ID, put it in{" "}
-                  <code>frontend/.env</code> as{" "}
-                  <code>NEXT_PUBLIC_CDP_PROJECT_ID</code>.
-                </li>
-                <li>
-                  <strong>Origin</strong>
-                  Under Wallets → Embedded Wallet, allow{" "}
-                  <code>http://localhost:3000</code>.
-                </li>
-                <li>
-                  <strong>Restart</strong>
-                  Restart the app. Then this sheet will mail a code and log you
-                  in.
-                </li>
-              </ol>
-              <button className="btn ghost" type="button" onClick={close}>
-                close
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </>
-  );
-}
-
-function CdpEmailSignIn() {
+export function EmailSignIn() {
   const { signInWithEmail: sendCode } = useSignInWithEmail();
   const { verifyEmailOTP } = useVerifyEmailOTP();
   const { signInWithEmail, signedIn, loginOpen, closeLogin } = useGameAccount();
@@ -147,14 +85,14 @@ function CdpEmailSignIn() {
       {open && (
         <div className="modal" role="dialog" aria-modal="true" aria-labelledby="email-sign-title">
           <div className="sheet">
-            <p className="sheet-kicker">Base email</p>
-            <h3 id="email-sign-title">{step === "mail" ? "Sign in" : "Enter the code"}</h3>
+            <p className="sheet-kicker">Take a seat</p>
+            <h3 id="email-sign-title">{step === "mail" ? "Leave an address" : "Check your mail"}</h3>
             {step === "mail" ? (
               <form className="mail-form" onSubmit={(e) => void requestCode(e)}>
                 <p>
-                  Log in with email or connect a wallet before a table opens.
-                  Base emails a six-digit code. After you enter it, this
-                  browser opens a table session that decrypts and dumps for you.
+                  Base knocks with a six-digit code. After that this table
+                  opens your sealed hand for you — no popup every time you
+                  dump a card.
                 </p>
                 <label htmlFor="whot-email">
                   Email
@@ -179,8 +117,8 @@ function CdpEmailSignIn() {
             ) : (
               <form className="mail-form" onSubmit={(e) => void verify(e)}>
                 <p>
-                  Code went to <strong>{email}</strong>. Check that inbox — it
-                  is not shown here.
+                  Six digits went to <strong>{email}</strong>. That code
+                  never shows on this page — only in the letter.
                 </p>
                 <label htmlFor="whot-code">
                   Six digits
@@ -197,7 +135,7 @@ function CdpEmailSignIn() {
                 </label>
                 {error ? <p className="mail-err">{error}</p> : null}
                 <button className="btn primary" type="submit" disabled={busy || code.length !== 6}>
-                  {busy ? "Opening session…" : "Sit down"}
+                  {busy ? "Opening the table…" : "Sit down"}
                 </button>
                 <button
                   className="btn ghost"
@@ -219,8 +157,4 @@ function CdpEmailSignIn() {
       )}
     </>
   );
-}
-
-export function EmailSignIn() {
-  return CDP_PROJECT_ID ? <CdpEmailSignIn /> : <CdpSetupHint />;
 }
