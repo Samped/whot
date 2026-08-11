@@ -1,0 +1,46 @@
+@import "tailwindcss";
+@config "../tailwind.config.ts";
+
+@layer base {
+  :root {
+    --paper: #efe6d4;
+    --ink: #1c1712;
+    --felt: #143328;
+    --felt-lit: #1c4434;
+    --wood: #5a3a22;
+    --blood: #a61c14;
+    --dust: #8c8274;
+    --rule: #d4cbb6;
+    --font-display: "Bricolage Grotesque", "Avenir Next", "Segoe UI", sans-serif;
+    --font-serif: "Source Serif 4", Georgia, "Times New Roman", serif;
+    --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+  }
+
+  * {
+    border-color: var(--rule);
+  }
+
+  html,
+  body {
+    background: #10281f;
+    color: var(--paper);
+    min-height: 100%;
+    min-height: 100dvh;
+    overflow-x: clip;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--blood);
+    outline-offset: 3px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}
