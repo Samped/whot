@@ -148,7 +148,7 @@ function CdpEmailSignIn() {
         <div className="modal" role="dialog" aria-modal="true" aria-labelledby="email-sign-title">
           <div className="sheet">
             <p className="sheet-kicker">Base email</p>
-            <h3 id="email-sign-title">{step === "mail" ? "Sign in to sit" : "Enter the code"}</h3>
+            <h3 id="email-sign-title">{step === "mail" ? "Sign in" : "Enter the code"}</h3>
             {step === "mail" ? (
               <form className="mail-form" onSubmit={(e) => void requestCode(e)}>
                 <p>
