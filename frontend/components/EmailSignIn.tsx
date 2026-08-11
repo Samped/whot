@@ -2,8 +2,10 @@
 
 import { useState } from "react";
 import { createPortal } from "react-dom";
-import { useSignInWithEmail, useVerifyEmailOTP } from "@coinbase/cdp-hooks";
+import { initialize, signInWithEmail as sendEmailCode } from "@coinbase/cdp-core";
+import { useVerifyEmailOTP } from "@coinbase/cdp-hooks";
 import { useGameAccount } from "@/hooks/useGameAccount";
+import { cdpConfig } from "@/lib/cdp";
 
 function errText(err: unknown) {
   if (err instanceof Error && err.message) return err.message;
@@ -16,10 +18,17 @@ function errText(err: unknown) {
   return typeof err === "string" ? err : "";
 }
 
+function pageOrigin() {
+  return typeof window !== "undefined" ? window.location.origin : "";
+}
+
 function cdpMessage(err: unknown) {
   const msg = errText(err) || "Could not reach Base.";
-  if (/cors|origin|allowlist|allowed domain|not allowed|forbidden/i.test(msg)) {
-    return "Base has not opened this site for email yet. Add this exact URL in CDP Portal → Embedded Wallet → Allowed domains.";
+  const origin = pageOrigin();
+  if (/network error|cors|origin|allowlist|allowed domain|not allowed|forbidden|failed to fetch/i.test(msg)) {
+    return origin
+      ? `Base blocked this page. In CDP Portal → Wallets → Clients → Add domain, paste exactly: ${origin}`
+      : "Base blocked this page. Add this site’s origin under CDP Portal → Wallets → Clients.";
   }
   if (/project/i.test(msg)) {
     return "Base would not take that address just now. Try again in a minute.";
@@ -33,7 +42,6 @@ function readField(form: HTMLFormElement, name: string) {
 }
 
 export function EmailSignIn() {
-  const { signInWithEmail: sendCode } = useSignInWithEmail();
   const { verifyEmailOTP } = useVerifyEmailOTP();
   const { signInWithEmail, signedIn, loginOpen, closeLogin } = useGameAccount();
   const [localOpen, setLocalOpen] = useState(false);
@@ -67,7 +75,8 @@ export function EmailSignIn() {
     setBusy(true);
     setError("");
     try {
-      const result = await sendCode({ email: address });
+      await initialize(cdpConfig);
+      const result = await sendEmailCode({ email: address });
       const id = result?.flowId;
       if (!id) throw new Error("Base did not start the code. Try again.");
       setFlowId(id);
