@@ -339,7 +339,7 @@ export async function POST(req: Request) {
       busy.delete(id);
     }
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Computer failed.";
+    const message = err instanceof Error ? err.message : "Computer could not dump.";
     console.error("[bot]", id, message);
     if (/already known|nonce/i.test(message)) {
       const pending = decisions.get(id);
