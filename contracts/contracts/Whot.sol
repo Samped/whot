@@ -252,7 +252,7 @@ contract Whot {
         emit Market(id, msg.sender, n);
     }
 
-    /// @notice House dumps a chosen computer card.
+    /// @notice House dumps one computer card onto the pile.
     function botDump(
         uint256 id,
         uint8 handIndex,
