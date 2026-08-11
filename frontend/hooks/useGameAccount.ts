@@ -122,7 +122,7 @@ export function GameAccountProvider({ children }: { children: ReactNode }) {
 
   const create = useCallback(() => {
     if (!walletAddress) {
-      throw new Error("Sign in with email or a wallet before you sit.");
+      throw new Error("Sign in with email or a wallet first.");
     }
     const next = createTableAccount(walletAddress);
     clearIncoSession();
@@ -170,12 +170,12 @@ export function GameAccountProvider({ children }: { children: ReactNode }) {
       const mailSigned = Boolean(agent?.email);
       if (!walletSigned && !mailSigned) {
         setLoginOpen(true);
-        throw new Error("Sign in with email or a wallet before you sit.");
+        throw new Error("Sign in with email or a wallet first.");
       }
       const rec = agent;
       if (!rec) {
         setLoginOpen(true);
-        throw new Error("Sign in with email or a wallet before you sit.");
+        throw new Error("Sign in with email or a wallet first.");
       }
       const bal = await accountBalance(rec.address);
       if (bal < minBalance) {
