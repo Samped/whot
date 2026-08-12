@@ -290,6 +290,11 @@ export function TableFelt({
   return (
     <div className="felt-wrap">
       <div className="seat-rail opp">
+        {lastCall ? (
+          <span className="call-chip" role="status">
+            {lastCall}
+          </span>
+        ) : null}
         <div className="seat-chip opp">
           <span className="avatar opp" aria-hidden />
           <div className="seat-meta">
@@ -297,11 +302,6 @@ export function TableFelt({
             <em>{opponentCount} sealed</em>
           </div>
         </div>
-        {lastCall ? (
-          <span className="call-chip" role="status">
-            {lastCall}
-          </span>
-        ) : null}
         <div className="fan opp-fan" ref={oppRef}>
           {Array.from({ length: shownBacks }, (_, i) => (
             <CardSlot

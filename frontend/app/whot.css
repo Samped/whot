@@ -638,6 +638,7 @@ a,
 .seat-rail {
   display: grid;
   gap: 0.4rem;
+  position: relative;
 }
 
 .seat-chip {
@@ -917,10 +918,11 @@ a,
 }
 
 .call-chip {
-  display: inline-flex;
-  align-self: flex-start;
+  position: absolute;
+  left: 0;
+  top: 0;
   z-index: 6;
-  max-width: min(220px, 70vw);
+  max-width: min(200px, 42vw);
   padding: 0.32rem 0.7rem;
   border-radius: 999px;
   background: linear-gradient(180deg, #fffdf8 0%, #f4efe4 100%);
@@ -2160,11 +2162,6 @@ button.wc {
   .seat-rail.opp {
     flex-shrink: 0;
     gap: 0.2rem;
-    justify-items: start;
-  }
-
-  .seat-chip.opp {
-    margin: 0;
   }
 
   .seat-chip strong {
@@ -2243,8 +2240,10 @@ button.wc {
   }
 
   .call-chip {
-    max-width: min(180px, 62vw);
-    padding: 0.26rem 0.55rem;
+    left: 0;
+    top: 0;
+    max-width: min(150px, 38vw);
+    padding: 0.26rem 0.5rem;
     font-size: 0.58rem;
     letter-spacing: 0.03em;
     line-height: 1.15;
@@ -2255,7 +2254,6 @@ button.wc {
     overflow: hidden;
     text-overflow: ellipsis;
     box-shadow: 0 6px 14px rgba(0, 0, 0, 0.32);
-    margin: 0.05rem 0 0.15rem;
   }
 
   .follow-chip {
@@ -2623,9 +2621,8 @@ button.wc {
 
   .call-chip {
     font-size: 0.52rem;
-    padding: 0.2rem 0.45rem;
-    max-width: min(150px, 58vw);
-    margin: 0 0 0.1rem;
+    padding: 0.2rem 0.42rem;
+    max-width: min(130px, 36vw);
   }
 
   .open-pile .wc-xl,
