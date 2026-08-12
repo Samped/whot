@@ -11,7 +11,7 @@ import { rememberTable } from "@/lib/recent-tables";
 import { TableFelt } from "@/components/TableFelt";
 import { MatchResult } from "@/components/MatchResult";
 import { CardSlot, ShapeGlyph, WhotBack, WhotFace } from "@/components/WhotCard";
-import { decodeCard, isLegal, pack } from "@/lib/whot";
+import { decodeCard, isLegal, pack, resolvePickChallenge } from "@/lib/whot";
 import { useGameAccount } from "@/hooks/useGameAccount";
 import { useSocialApi } from "@/hooks/SocialProvider";
 import { isOpen } from "@/lib/table-view";
@@ -368,11 +368,11 @@ function HowSection({ compact = false }: { compact?: boolean }) {
             </div>
             <div>
               <dt>2</dt>
-              <dd>Pick two — the other seat draws two, unless they dump a 2.</dd>
+              <dd>Pick two — the other seat draws two, unless they dump a 2 (stacks +2).</dd>
             </div>
             <div>
               <dt>5</dt>
-              <dd>Pick three — same idea, with fives.</dd>
+              <dd>Pick three — the other seat draws three, unless they dump a 5 (stacks +3).</dd>
             </div>
             <div>
               <dt>8</dt>
@@ -590,11 +590,18 @@ function PvpScreen({ tableId }: { tableId: number }) {
   const oppScore = game.seat === 0 ? (game.table?.score1_ ?? 0) : (game.table?.score0_ ?? 0);
   const tieGame = phase === 4 && isOpen(game.table?.winner_);
   const countingRanks = Boolean(game.table?.marketEnd_) && phase === 3;
+  const pickChallenge = resolvePickChallenge({
+    pendingKind: game.table?.pickKind ?? 0,
+    pendingPick: game.table?.pick ?? 0,
+    top,
+    lastCall: game.lastCall,
+    lastPlayed: game.lastPlayed,
+  });
   const legalHint =
     game.myTurn &&
     live &&
     !countingRanks &&
-    game.myCards.some((c) => isLegal(c, top, called, game.table?.pickKind ?? 0));
+    game.myCards.some((c) => isLegal(c, top, called, pickChallenge.kind));
 
   return (
     <div className="play-screen">
@@ -647,10 +654,18 @@ function PvpScreen({ tableId }: { tableId: number }) {
                   ? game.status
                   : game.myTurn
                     ? legalHint
-                      ? "Your turn — dump a card."
-                      : game.table?.marketLeft === 0
-                        ? "Market is dry — go market to count ranks."
-                        : "Nothing follows. Go market."
+                      ? pickChallenge.kind
+                        ? pickChallenge.kind === 2
+                          ? "Dump a 2 to stack, or pay the pick."
+                          : "Dump a 5 to stack, or pay the pick."
+                        : "Your turn — dump a card."
+                      : pickChallenge.kind
+                        ? pickChallenge.kind === 2
+                          ? "No 2 to stack — pay pick two."
+                          : "No 5 to stack — pay pick three."
+                        : game.table?.marketLeft === 0
+                          ? "Market is dry — go market to count ranks."
+                          : "Nothing follows. Go market."
                     : game.table?.solo
                       ? game.seat < 0
                         ? "Watching this table."

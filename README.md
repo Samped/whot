@@ -21,7 +21,7 @@ Tap your email / account chip for the **dashboard** (nickname, avatar, wins/loss
 ## Layout
 
 ```
-├── contracts/          # Hardhat — Whot.sol + WhotCards.sol
+├── contracts/          # Hardhat — Whot.sol + WhotSocial.sol
 └── frontend/           # Next.js + RainbowKit + @inco/lightning-js
 ```
 
@@ -30,7 +30,7 @@ Tap your email / account chip for the **dashboard** (nickname, avatar, wins/loss
 ```bash
 npm install
 cp frontend/.env.example frontend/.env
-# set NEXT_PUBLIC_WHOT_ADDRESS after deploy
+# set NEXT_PUBLIC_WHOT_ADDRESS (and optional RESEND_API_KEY) after deploy
 
 npm run dev
 ```
@@ -45,7 +45,7 @@ npm run contracts:test
 npm run contracts:deploy:testnet
 ```
 
-Paste the printed address into `frontend/.env` as `NEXT_PUBLIC_WHOT_ADDRESS`.
+Paste the printed `Whot` address into `frontend/.env` as `NEXT_PUBLIC_WHOT_ADDRESS`, and the `Social` address as `NEXT_PUBLIC_SOCIAL_ADDRESS`.
 
 ## License
 

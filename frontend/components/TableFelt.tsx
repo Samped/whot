@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { CardSlot, ShapeGlyph, WhotBack, WhotFace } from "@/components/WhotCard";
-import { isLegal, SHAPE_NAME, type WhotCard } from "@/lib/whot";
+import { isLegal, resolvePickChallenge, SHAPE_NAME, type WhotCard } from "@/lib/whot";
 import type { LastPlay } from "@/hooks/useWhot";
 
 const SHAPES = [1, 2, 3, 4, 5] as const;
@@ -147,12 +147,11 @@ export function TableFelt({
 
   useEffect(() => {
     if (!top) return;
-    setHeldTop((cur) => {
-      if (flyer) return cur;
-      if (cur && lastPlayed?.card && cur.id === lastPlayed.card.id && top.id !== cur.id) return cur;
-      return top;
-    });
-  }, [top?.id, lastPlayed?.card?.id, flyer]);
+    // Trust the on-chain pile once it moves. Don't keep an optimistic computer
+    // preview that can disagree with the real pick-two / pick-three state.
+    if (flyer?.who === "me") return;
+    setHeldTop(top);
+  }, [top?.id, flyer?.who, flyer?.key]);
 
   function pileBox() {
     return boxOf(pileRef.current?.querySelector(".wc") ?? pileRef.current);
@@ -198,6 +197,11 @@ export function TableFelt({
   useEffect(() => {
     if (!lastPlayed || lastPlayed.who !== "opp" || !lastPlayed.card) return;
     if (heldTop?.id === lastPlayed.card.id) return;
+    // If chain already has this card, just seat it — don't block input with a flyer.
+    if (top?.id === lastPlayed.card.id) {
+      setHeldTop(lastPlayed.card);
+      return;
+    }
     launch("opp", lastPlayed.card, oppRef.current?.querySelector(".wc") ?? oppRef.current);
   }, [lastPlayed?.key]);
 
@@ -226,6 +230,16 @@ export function TableFelt({
     setLifted(null);
   }, [myCards.length, myTurn]);
 
+  const challenge = resolvePickChallenge({
+    pendingKind,
+    pendingPick,
+    top: top ?? heldTop,
+    lastCall,
+    lastPlayed,
+  });
+  const legalTop = challenge.kind ? top ?? heldTop : heldTop ?? top;
+  const inputLocked = busy || sealedPending > 0 || hideMine !== null || flyer?.who === "me";
+
   function runMine(index: number, nextShape: number, card: WhotCard) {
     setLifted(null);
     setHideMine(index);
@@ -235,8 +249,8 @@ export function TableFelt({
 
   function clickCard(index: number) {
     const card = myCards[index];
-    if (!card || !myTurn || !live || busy || sealedPending > 0 || hideMine !== null || flyer) return;
-    if (!isLegal(card, heldTop ?? top, calledShape, pendingKind)) return;
+    if (!card || !myTurn || !live || inputLocked) return;
+    if (!isLegal(card, legalTop, calledShape, challenge.kind)) return;
     const stacked = fanSpread(fanBox.width, fanBox.cardW, myCards.length) < -28;
     if (coarse && stacked && lifted !== index) {
       setLifted(index);
@@ -320,16 +334,23 @@ export function TableFelt({
             <div
               className={`follow-chip s-${shapeName}${tight ? " is-compact" : ""}`}
               aria-label={
-                pendingKind
-                  ? `Follow ${shapeName}, pick ${pendingPick}`
+                challenge.kind
+                  ? `Follow ${shapeName}, pick ${challenge.pick || (challenge.kind === 2 ? 2 : 3)}`
                   : `Follow ${shapeName}, shape or number`
               }
             >
               <ShapeGlyph shape={calledShape || 1} />
               <div className="follow-copy">
                 <b>{tight ? shapeName : `Follow ${shapeName}`}</b>
-                {!tight && (pendingKind ? <em>pick {pendingPick}</em> : <em>shape or #</em>)}
-                {tight && pendingKind ? <em className="pick-hint">+{pendingPick}</em> : null}
+                {!tight &&
+                  (challenge.kind ? (
+                    <em>pick {challenge.pick || (challenge.kind === 2 ? 2 : 3)}</em>
+                  ) : (
+                    <em>shape or #</em>
+                  ))}
+                {tight && challenge.kind ? (
+                  <em className="pick-hint">+{challenge.pick || (challenge.kind === 2 ? 2 : 3)}</em>
+                ) : null}
               </div>
             </div>
           </div>
@@ -354,11 +375,8 @@ export function TableFelt({
             const ok =
               myTurn &&
               live &&
-              !busy &&
-              sealedPending === 0 &&
-              hideMine === null &&
-              !flyer &&
-              isLegal(card, heldTop ?? top, calledShape, pendingKind);
+              !inputLocked &&
+              isLegal(card, legalTop, calledShape, challenge.kind);
             return (
               <CardSlot
                 key={`${card.id}-${i}`}
@@ -390,10 +408,14 @@ export function TableFelt({
         <div className="hand-bar">
           <button
             className="btn market"
-            disabled={!myTurn || busy || sealedPending > 0 || !live || hideMine !== null || Boolean(flyer)}
+            disabled={!myTurn || inputLocked || !live}
             onClick={onMarket}
           >
-            {pendingPick ? `Pay pick ${pendingPick}` : marketLeft === 0 ? "Count ranks" : "Go market"}
+            {challenge.pick
+              ? `Pay pick ${challenge.pick}`
+              : marketLeft === 0
+                ? "Count ranks"
+                : "Go market"}
           </button>
           {footer}
         </div>

@@ -58,12 +58,44 @@ export function specialCall(rank: number): string {
   return "";
 }
 
+/** Resolve pick-two / pick-three even if UI state is briefly ahead of or behind the chain. */
+export function resolvePickChallenge(input: {
+  pendingKind?: number;
+  pendingPick?: number;
+  top?: WhotCard | null;
+  lastCall?: string;
+  lastPlayed?: { who?: string; card?: WhotCard | null; call?: string } | null;
+}): { kind: number; pick: number } {
+  let kind = Number(input.pendingKind || 0);
+  let pick = Number(input.pendingPick || 0);
+
+  if ((kind === 2 || kind === 5) && pick > 0) return { kind, pick };
+
+  const top = input.top;
+  if (pick > 0 && (top?.rank === 2 || top?.rank === 5)) {
+    return { kind: top.rank, pick };
+  }
+
+  const call = input.lastCall || input.lastPlayed?.call || "";
+  const played = input.lastPlayed?.who === "opp" ? input.lastPlayed.card : null;
+  if (played?.rank === 2 || /pick two/i.test(call)) {
+    return { kind: 2, pick: pick > 0 ? pick : 2 };
+  }
+  if (played?.rank === 5 || /pick three/i.test(call)) {
+    return { kind: 5, pick: pick > 0 ? pick : 3 };
+  }
+
+  if (kind === 2 || kind === 5) return { kind, pick: pick > 0 ? pick : kind === 2 ? 2 : 3 };
+  return { kind: 0, pick: 0 };
+}
+
 export function isLegal(
   card: WhotCard,
   top: WhotCard | null,
   calledShape: number,
   pendingKind: number,
 ): boolean {
+  // Answering pick-two / pick-three: any matching rank stacks (any shape).
   if (pendingKind === 2) return card.rank === 2;
   if (pendingKind === 5) return card.rank === 5;
   if (card.rank === 20) return true;

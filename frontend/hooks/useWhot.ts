@@ -7,6 +7,7 @@ import { whotAbi } from "@/abi/whot";
 import { WHOT_ADDRESS } from "@/lib/addresses";
 import { ensureIncoSession, packUintAttestation, retryDecrypt } from "@/lib/inco-attestation";
 import { decodeCard, decodeIndex, type WhotCard } from "@/lib/whot";
+import { specialCall, rankOf } from "@/lib/whot";
 import { friendlyError } from "@/lib/errors";
 import { activeChain } from "@/lib/network";
 import { useGameAccount } from "@/hooks/useGameAccount";
@@ -36,6 +37,10 @@ async function botRequest(payload: Record<string, unknown>, ms = 20_000): Promis
 
 function keepsTurn(rank: number) {
   return rank === 1 || rank === 8 || rank === 14;
+}
+
+function specialCallFromTop(topId: number) {
+  return specialCall(rankOf(topId)) || "Computer";
 }
 
 export { WHOT_ADDRESS };
@@ -665,17 +670,21 @@ export function useWhot(tableId: number) {
     }
     if (table.top === seenTop.current) return;
     setLastPlayed((prev) => {
-      if (prev?.card?.id === table.top) {
-        seenTop.current = table.top;
-        return prev;
-      }
-      if (prev?.who === "opp" && prev.card && prev.card.id !== table.top) return prev;
       if (prev?.who === "me" && prev.card) {
         seenTop.current = table.top;
         return prev;
       }
+      if (prev?.card?.id === table.top) {
+        seenTop.current = table.top;
+        return prev;
+      }
+      // Prefer the settled on-chain card over an optimistic computer preview.
       seenTop.current = table.top;
-      return { key: Date.now(), who: "opp", card: decodeCard(table.top), call: "Computer" };
+      const call =
+        prev?.who === "opp" && prev.call && prev.call !== "Computer"
+          ? prev.call
+          : specialCallFromTop(table.top);
+      return { key: Date.now(), who: "opp", card: decodeCard(table.top), call };
     });
   }, [table?.top]);
 
