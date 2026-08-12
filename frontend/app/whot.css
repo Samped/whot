@@ -1051,6 +1051,9 @@ button.wc {
 .glyph.hero { width: 46px; height: 46px; }
 .wc-sm .glyph.hero { width: 26px; height: 26px; }
 .wc-lg .glyph.hero { width: 58px; height: 58px; }
+.wc-lg .wc-corner b { font-size: 1.05rem; }
+.wc-lg .wc-ribbon { font-size: 0.5rem; padding: 2px 6px; }
+.wc-lg .wc-emblem { inset: 24px 10px 28px; }
 .wc-xl .glyph.hero { width: 78px; height: 78px; }
 .wc-xl .wc-corner b { font-size: 1.45rem; }
 .wc-xl .wc-corner { width: 32px; }
@@ -1071,7 +1074,7 @@ button.wc {
   position: absolute;
   bottom: 0;
   padding: 2px 5px;
-  background: currentColor;
+  background: var(--suit, #1c1408);
   color: #f4ead4;
   font-size: 0.44rem;
   letter-spacing: 0.06em;
@@ -1080,8 +1083,8 @@ button.wc {
 }
 
 .wc.wild .wc-ribbon {
-  background: #1c1712;
-  color: #efe6d4;
+  background: #efe6d4;
+  color: #1c1712;
 }
 
 .wc.playable { cursor: pointer; }
@@ -1185,13 +1188,13 @@ button.wc {
   filter: saturate(0.8);
 }
 
-.wc.shape-circle { color: #a61c14; }
-.wc.shape-triangle { color: #1f6b45; }
-.wc.shape-cross { color: #1c355e; }
-.wc.shape-square { color: #c45e00; }
-.wc.shape-star { color: #2a211c; }
+.wc.shape-circle { color: #a61c14; --suit: #a61c14; }
+.wc.shape-triangle { color: #1f6b45; --suit: #1f6b45; }
+.wc.shape-cross { color: #1c355e; --suit: #1c355e; }
+.wc.shape-square { color: #c45e00; --suit: #c45e00; }
+.wc.shape-star { color: #2a211c; --suit: #2a211c; }
 .wc.shape-whot,
-.wc.wild { color: #1c1712; }
+.wc.wild { color: #1c1712; --suit: #1c1712; }
 
 .wc.wild .wc-plate {
   background: #1c1712;
@@ -1855,34 +1858,27 @@ button.wc {
 }
 
 .how-calls {
+  list-style: none;
   margin: 0;
+  padding: 0;
   display: grid;
   gap: 0;
 }
 
-.how-calls div {
+.how-call {
   display: grid;
   grid-template-columns: auto 1fr;
-  gap: 0.9rem 1rem;
+  gap: 1rem 1.15rem;
   align-items: center;
-  padding: 0.7rem 0;
+  padding: 0.85rem 0;
   border-top: 1px solid rgba(239, 230, 212, 0.12);
 }
 
-.how-calls dt {
-  display: flex;
-  align-items: center;
-  gap: 0.65rem;
-  margin: 0;
-  color: var(--dust);
-}
-
-/* Full play-face card, scaled down — same art as the table. */
 .how-call-card {
   display: block;
   position: relative;
-  width: 58px;
-  height: 83px;
+  width: 59px;
+  height: 84px;
   flex: 0 0 auto;
 }
 
@@ -1890,30 +1886,37 @@ button.wc {
   position: absolute;
   top: 0;
   left: 0;
-  transform: scale(0.604);
+  transform: scale(0.5);
   transform-origin: top left;
   pointer-events: none;
-  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.35);
+}
+
+.how-call-copy {
+  display: grid;
+  gap: 0.35rem;
+  min-width: 0;
 }
 
 .how-call-n {
   display: flex;
-  flex-direction: column;
-  gap: 0.12rem;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.35rem 0.55rem;
+  margin: 0;
   font-family: var(--font-mono), ui-monospace, monospace;
-  font-size: 1.1rem;
+  font-size: 1.2rem;
   line-height: 1.1;
-  min-width: 2.6rem;
+  color: var(--dust);
 }
 
 .how-call-k {
-  font-size: 0.58rem;
-  letter-spacing: 0.08em;
+  font-size: 0.62rem;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
   color: rgba(239, 230, 212, 0.48);
 }
 
-.how-calls dd {
+.how-call-text {
   margin: 0;
   line-height: 1.45;
   color: rgba(239, 230, 212, 0.8);
@@ -2522,13 +2525,9 @@ button.wc {
     gap: 1.6rem;
   }
 
-  .how-calls div {
-    grid-template-columns: 1fr;
-    gap: 0.45rem;
-  }
-
-  .how-calls dt {
-    gap: 0.75rem;
+  .how-call {
+    gap: 0.85rem;
+    align-items: start;
   }
 
   .result-splash {

@@ -362,7 +362,7 @@ function HowSection({ compact = false }: { compact?: boolean }) {
             can dump anything else.
           </p>
           <p className="how-calls-label">Specials by card number</p>
-          <dl className="how-calls">
+          <ul className="how-calls">
             {[
               {
                 card: pack(1, 1),
@@ -395,20 +395,20 @@ function HowSection({ compact = false }: { compact?: boolean }) {
                 text: "WHOT — call the shape the table must follow.",
               },
             ].map((row) => (
-              <div key={row.n}>
-                <dt>
-                  <span className="how-call-card">
-                    <WhotFace card={decodeCard(row.card)} size="md" />
-                  </span>
-                  <span className="how-call-n">
+              <li key={row.n} className="how-call">
+                <span className="how-call-card">
+                  <WhotFace card={decodeCard(row.card)} size="lg" />
+                </span>
+                <div className="how-call-copy">
+                  <p className="how-call-n">
                     <span className="how-call-k">Card no.</span>
-                    {row.n}
-                  </span>
-                </dt>
-                <dd>{row.text}</dd>
-              </div>
+                    <span>{row.n}</span>
+                  </p>
+                  <p className="how-call-text">{row.text}</p>
+                </div>
+              </li>
             ))}
-          </dl>
+          </ul>
         </article>
 
         <article className="how-col seal">
