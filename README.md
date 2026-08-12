@@ -6,7 +6,7 @@ Inco is **TEE-based**. Each hand stays sealed until that card is dumped. Settlem
 
 ## Play
 
-1. Open [http://localhost:3000](http://localhost:3000)
+1. Open [https://whatcards.vercel.app/](https://whatcards.vercel.app/)
 2. **Play the computer** — no wallet
 3. **Host a table** — copy the number or `/?t=0007` and send it
 4. Friend sits, pack shuffles, hands stay sealed
