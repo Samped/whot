@@ -5,9 +5,15 @@
   :root {
     --paper: #efe6d4;
     --ink: #1c1712;
-    --felt: #143328;
-    --felt-lit: #1c4434;
-    --wood: #5a3a22;
+    --felt: #0e241c;
+    --felt-deep: #0a1a14;
+    --felt-mid: #164032;
+    --felt-lit: #1d5240;
+    --felt-glow: #2a6b52;
+    --wood: #4a3020;
+    --wood-dark: #2a1a10;
+    --wood-lit: #6b4528;
+    --gold: #c9a962;
     --blood: #a61c14;
     --dust: #8c8274;
     --rule: #d4cbb6;

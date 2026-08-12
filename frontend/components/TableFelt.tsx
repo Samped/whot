@@ -253,9 +253,9 @@ export function TableFelt({
   return (
     <div className="felt-wrap">
       <div className="seat-rail opp">
-        <div className="seat-chip">
-          <span className="avatar opp" />
-          <div>
+        <div className="seat-chip opp">
+          <span className="avatar opp" aria-hidden />
+          <div className="seat-meta">
             <strong>{opponentName}</strong>
             <em>{opponentCount} sealed</em>
           </div>
@@ -270,35 +270,43 @@ export function TableFelt({
       </div>
 
       <div className="table-stage">
-        <div className="felt">
-          <div className="felt-grain" />
-          <div className="pile market-stack">
-            <div className="stack">
-              <WhotBack size="md" style={{ transform: "rotate(-10deg) translate(-8px, 6px)" }} />
-              <WhotBack size="md" style={{ transform: "rotate(-4deg) translate(-2px, 2px)" }} />
-              <WhotBack size="md" />
-            </div>
-            <span>market · {marketLeft}</span>
-          </div>
+        <div className="table-rail" aria-hidden />
+        <div className={`felt ${myTurn ? "is-mine" : ""}`}>
+          <div className="felt-vignette" aria-hidden />
+          <div className="felt-grain" aria-hidden />
+          <div className="felt-shine" aria-hidden />
 
-          <div className={`follow-chip s-${shapeName}`}>
-            <ShapeGlyph shape={calledShape || 1} />
-            <div>
-              <b>Follow {shapeName}</b>
-              {pendingKind ? <em>pay pick {pendingPick}</em> : <em>shape or number</em>}
+          <div className="felt-hud">
+            <div className={`follow-chip s-${shapeName}`}>
+              <ShapeGlyph shape={calledShape || 1} />
+              <div>
+                <b>Follow {shapeName}</b>
+                {pendingKind ? <em>pay pick {pendingPick}</em> : <em>shape or number</em>}
+              </div>
             </div>
           </div>
 
-          <div className="pile discard open-pile" ref={pileRef}>
-            <div key={seatTick} className={seatTick ? "pile-face is-seat" : "pile-face"}>
-              {pile ? <WhotFace card={pile} size="xl" /> : <WhotBack size="xl" />}
+          <div className="felt-center">
+            <div className="pile-spotlight" aria-hidden />
+            <div className="pile market-stack">
+              <div className="stack">
+                <WhotBack size="md" style={{ transform: "rotate(-10deg) translate(-8px, 6px)" }} />
+                <WhotBack size="md" style={{ transform: "rotate(-4deg) translate(-2px, 2px)" }} />
+                <WhotBack size="md" />
+              </div>
+              <span className="pile-tag">Market · {marketLeft}</span>
             </div>
-            <span className="open-label">
-              {pile
-                ? `Open · ${pile.rank === 20 ? "WHOT" : pile.rank} ${SHAPE_NAME[pile.shape] || ""}`
-                : "Opening the pile…"}
-            </span>
-            {lastCall ? <span className="call-chip">{lastCall}</span> : null}
+            <div className="pile discard open-pile" ref={pileRef}>
+              <div key={seatTick} className={seatTick ? "pile-face is-seat" : "pile-face"}>
+                {pile ? <WhotFace card={pile} size="xl" /> : <WhotBack size="xl" />}
+              </div>
+              <span className="open-label">
+                {pile
+                  ? `Open · ${pile.rank === 20 ? "WHOT" : pile.rank} ${SHAPE_NAME[pile.shape] || ""}`
+                  : "Opening the pile…"}
+              </span>
+              {lastCall ? <span className="call-chip">{lastCall}</span> : null}
+            </div>
           </div>
         </div>
       </div>
