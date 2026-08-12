@@ -919,16 +919,16 @@ a,
 .call-chip {
   position: absolute;
   left: 50%;
-  top: 0;
+  top: auto;
+  bottom: calc(100% + 8px);
   z-index: 6;
-  transform: translate(-50%, 0);
-  max-width: calc(100% - 0.5rem);
+  transform: translateX(-50%);
+  max-width: min(160px, calc(100vw - 2rem));
   padding: 0.32rem 0.7rem;
-  border-radius: 0 0 10px 10px;
+  border-radius: 999px;
   background: linear-gradient(180deg, #fffdf8 0%, #f4efe4 100%);
   color: var(--ink);
   border: 1px solid var(--ink);
-  border-top: 0;
   font-family: var(--font-display), sans-serif;
   font-size: 0.7rem;
   font-weight: 700;
@@ -946,11 +946,11 @@ a,
 @keyframes call-in {
   from {
     opacity: 0;
-    transform: translate(-50%, -8px);
+    transform: translate(-50%, 6px);
   }
   to {
     opacity: 1;
-    transform: translate(-50%, 0);
+    transform: translateX(-50%);
   }
 }
 
@@ -2252,10 +2252,9 @@ button.wc {
   }
 
   .call-chip {
-    top: 0;
-    max-width: calc(100% - 0.3rem);
-    padding: 0.28rem 0.4rem 0.32rem;
-    border-radius: 0 0 8px 8px;
+    bottom: calc(100% + 6px);
+    max-width: min(140px, calc(100vw - 3rem));
+    padding: 0.28rem 0.5rem;
     font-size: 0.58rem;
     letter-spacing: 0.03em;
     line-height: 1.15;
@@ -2629,9 +2628,10 @@ button.wc {
   }
 
   .call-chip {
+    bottom: calc(100% + 4px);
     font-size: 0.52rem;
-    padding: 0.22rem 0.32rem 0.26rem;
-    max-width: calc(100% - 0.2rem);
+    padding: 0.22rem 0.4rem;
+    max-width: min(120px, calc(100vw - 3.5rem));
   }
 
   .open-pile .wc-xl,
