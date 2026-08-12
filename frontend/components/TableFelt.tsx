@@ -389,7 +389,7 @@ export function TableFelt({
             disabled={!myTurn || busy || sealedPending > 0 || !live || hideMine !== null || Boolean(flyer)}
             onClick={onMarket}
           >
-            {pendingPick ? `Pay pick ${pendingPick}` : marketLeft === 0 ? "Count hands" : "Go market"}
+            {pendingPick ? `Pay pick ${pendingPick}` : marketLeft === 0 ? "Count ranks" : "Go market"}
           </button>
           {footer}
         </div>

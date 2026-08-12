@@ -20,6 +20,8 @@ export type TableView = {
   solo: boolean;
   botPending_: boolean;
   marketEnd_: boolean;
+  score0_: number;
+  score1_: number;
 };
 
 export function isOpen(addr?: string) {
@@ -48,11 +50,18 @@ export function parseTable(raw: unknown): TableView | undefined {
     solo: Boolean(get(14, "solo")),
     botPending_: Boolean(get(15, "botPending_")),
     marketEnd_: Boolean(get(16, "marketEnd_")),
+    score0_: Number(get(17, "score0_") ?? 0),
+    score1_: Number(get(18, "score1_") ?? 0),
   };
 }
 
 export function computerToPlay(table?: TableView | null) {
   return Boolean(
-    table?.solo && table.phase_ === 3 && table.ready && table.turn_ === 1 && isOpen(table.winner_),
+    table?.solo &&
+      table.phase_ === 3 &&
+      table.ready &&
+      table.turn_ === 1 &&
+      !table.marketEnd_ &&
+      isOpen(table.winner_),
   );
 }

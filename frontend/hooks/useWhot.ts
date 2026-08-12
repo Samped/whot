@@ -117,6 +117,7 @@ export function useWhot(tableId: number) {
   const botKickKey = useRef("");
   const openerLock = useRef(false);
   const openerKickKey = useRef("");
+  const settleKickKey = useRef("");
   const peekLock = useRef(false);
   const peekDirty = useRef(false);
   const peekedKey = useRef("");
@@ -139,7 +140,8 @@ export function useWhot(tableId: number) {
       refetchInterval: (q) => {
         const t = parseTable(q.state.data);
         if (t?.phase_ === 2 && !t.ready) return 1_200;
-        if (t?.solo && t.phase_ === 3 && t.turn_ === 1 && isOpen(t.winner_)) return 700;
+        if (t?.marketEnd_ && t.phase_ === 3) return 1_200;
+        if (t?.solo && t.phase_ === 3 && t.turn_ === 1 && !t.marketEnd_ && isOpen(t.winner_)) return 700;
         return 3_500;
       },
     },
@@ -443,6 +445,40 @@ export function useWhot(tableId: number) {
     }
   }, [refetch, tableId]);
 
+  const settleMarket = useCallback(async () => {
+    if (!WHOT_ADDRESS || tableId <= 0) return;
+    if (openerLock.current) return;
+    openerLock.current = true;
+    setError(null);
+    setStatus("Counting the ranks in each hand…");
+    try {
+      const res = await fetch("/api/settle", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ id: tableId }),
+        signal: AbortSignal.timeout(90_000),
+      });
+      const body = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        pending?: boolean;
+        done?: boolean;
+      };
+      if (body.pending) {
+        setStatus("Still counting hands…");
+        return;
+      }
+      if (!res.ok && !body.done) throw new Error(body.error || "Could not count the hands.");
+      await refetch();
+    } catch (err) {
+      await refetch();
+      const msg = friendlyError(err);
+      if (!/wrongphase|already|settling/i.test(msg)) setError(msg);
+    } finally {
+      openerLock.current = false;
+      setStatus("");
+    }
+  }, [refetch, tableId]);
+
   useEffect(() => {
     if (table?.phase_ !== 2 || table.ready) {
       openerKickKey.current = "";
@@ -454,6 +490,18 @@ export function useWhot(tableId: number) {
     const t = setTimeout(() => void lockOpener(), 200);
     return () => clearTimeout(t);
   }, [table?.phase_, table?.ready, tableId, lockOpener]);
+
+  useEffect(() => {
+    if (!table?.marketEnd_ || table.phase_ !== 3) {
+      if (table?.phase_ === 4) settleKickKey.current = "";
+      return;
+    }
+    const key = `${tableId}:settle`;
+    if (settleKickKey.current === key) return;
+    settleKickKey.current = key;
+    const t = setTimeout(() => void settleMarket(), 250);
+    return () => clearTimeout(t);
+  }, [table?.marketEnd_, table?.phase_, tableId, settleMarket]);
 
   const openSolo = useCallback(async () => {
     if (!WHOT_ADDRESS) return 0;

@@ -40,6 +40,8 @@ contract Whot {
         bool botPending;
         bytes32 botPackedHandle;
         bool marketEnd;
+        uint16 score0;
+        uint16 score1;
     }
 
     struct TableView {
@@ -60,6 +62,8 @@ contract Whot {
         bool solo;
         bool botPending_;
         bool marketEnd_;
+        uint16 score0_;
+        uint16 score1_;
     }
 
     struct Stats {
@@ -89,6 +93,7 @@ contract Whot {
     event OpenerSet(uint256 indexed id, uint16 card);
     event CardPlayed(uint256 indexed id, address indexed player, uint16 card, uint8 calledShape, string call);
     event Market(uint256 indexed id, address indexed player, uint8 n);
+    event MarketCount(uint256 indexed id);
     event CheckUp(uint256 indexed id, address indexed winner);
     event SoloOpened(address indexed player, uint256 indexed id);
     event BotMove(uint256 indexed id, bytes32 packedHandle);
@@ -108,6 +113,8 @@ contract Whot {
     error NoTable();
     error NotHost();
     error NotHouse();
+    error MarketSettling();
+    error BadHand();
 
     modifier seated(uint256 id) {
         Table storage t = tables[id];
@@ -206,6 +213,7 @@ contract Whot {
     ) external seated(id) {
         Table storage t = tables[id];
         if (t.phase != Phase.Live || !t.openerReady) revert WrongPhase();
+        if (t.marketEnd) revert MarketSettling();
         if (msg.sender != _toPlay(t)) revert NotYourTurn();
         uint8 count = handCount[id][msg.sender];
         if (handIndex >= count) revert BadIndex();
@@ -231,7 +239,7 @@ contract Whot {
         string memory call = _applySpecials(id, card, msg.sender);
         emit CardPlayed(id, msg.sender, card, t.calledShape, call);
 
-        if (t.phase == Phase.Finished) return;
+        if (t.phase == Phase.Finished || t.marketEnd) return;
 
         if (handCount[id][msg.sender] == 0) {
             _finishEmptyHand(id, msg.sender);
@@ -241,17 +249,18 @@ contract Whot {
     function goMarket(uint256 id) external seated(id) {
         Table storage t = tables[id];
         if (t.phase != Phase.Live) revert WrongPhase();
+        if (t.marketEnd) revert MarketSettling();
         if (msg.sender != _toPlay(t)) revert NotYourTurn();
 
         uint8 n = t.pendingPick == 0 ? 1 : t.pendingPick;
         if (t.nextIndex >= PACK) {
-            _finishByHandCount(id);
+            _beginMarketCount(id);
             return;
         }
 
         uint8 dealt = _dealTo(id, msg.sender, n);
         emit Market(id, msg.sender, dealt);
-        if (t.phase == Phase.Finished) return;
+        if (t.phase == Phase.Finished || t.marketEnd) return;
 
         t.pendingPick = 0;
         t.pendingKind = 0;
@@ -269,6 +278,7 @@ contract Whot {
         if (msg.sender != house) revert NotHouse();
         Table storage t = tables[id];
         if (!t.vsBot || t.phase != Phase.Live || !t.openerReady) revert WrongPhase();
+        if (t.marketEnd) revert MarketSettling();
         if (t.turn != 1 || t.botPending) revert NotYourTurn();
         address bot = address(this);
         if (handIndex >= handCount[id][bot]) revert BadIndex();
@@ -293,7 +303,7 @@ contract Whot {
         string memory call = _applySpecials(id, card, bot);
         emit CardPlayed(id, bot, card, t.calledShape, call);
 
-        if (t.phase == Phase.Finished) return;
+        if (t.phase == Phase.Finished || t.marketEnd) return;
 
         if (handCount[id][bot] == 0) {
             _finishEmptyHand(id, bot);
@@ -305,17 +315,18 @@ contract Whot {
         if (msg.sender != house) revert NotHouse();
         Table storage t = tables[id];
         if (!t.vsBot || t.phase != Phase.Live || !t.openerReady) revert WrongPhase();
+        if (t.marketEnd) revert MarketSettling();
         if (t.turn != 1 || t.botPending) revert NotYourTurn();
         address bot = address(this);
         uint8 n = t.pendingPick == 0 ? 1 : t.pendingPick;
         if (t.nextIndex >= PACK) {
-            _finishByHandCount(id);
+            _beginMarketCount(id);
             return;
         }
 
         uint8 dealt = _dealTo(id, bot, n);
         emit Market(id, bot, dealt);
-        if (t.phase == Phase.Finished) return;
+        if (t.phase == Phase.Finished || t.marketEnd) return;
 
         t.pendingPick = 0;
         t.pendingKind = 0;
@@ -328,6 +339,7 @@ contract Whot {
     function botThink(uint256 id) external {
         Table storage t = tables[id];
         if (!t.vsBot || t.phase != Phase.Live || !t.openerReady) revert WrongPhase();
+        if (t.marketEnd) revert MarketSettling();
         if (t.turn != 1 || t.botPending) revert NotYourTurn();
 
         address bot = address(this);
@@ -353,6 +365,7 @@ contract Whot {
     function lockBot(uint256 id, DecryptionAttestation calldata att, bytes[] calldata sigs) external {
         Table storage t = tables[id];
         if (!t.vsBot || !t.botPending || t.phase != Phase.Live) revert WrongPhase();
+        if (t.marketEnd) revert MarketSettling();
         if (!inco.incoVerifier().isValidDecryptionAttestation(att, sigs)) revert BadAttestation();
         if (att.handle != t.botPackedHandle) revert HandleMismatch();
 
@@ -365,12 +378,12 @@ contract Whot {
         if (slot == 255) {
             uint8 n = t.pendingPick == 0 ? 1 : t.pendingPick;
             if (t.nextIndex >= PACK) {
-                _finishByHandCount(id);
+                _beginMarketCount(id);
                 return;
             }
             uint8 dealt = _dealTo(id, bot, n);
             emit Market(id, bot, dealt);
-            if (t.phase == Phase.Finished) return;
+            if (t.phase == Phase.Finished || t.marketEnd) return;
             t.pendingPick = 0;
             t.pendingKind = 0;
             t.turn = 0;
@@ -390,7 +403,7 @@ contract Whot {
         string memory call = _applySpecials(id, card, bot);
         emit CardPlayed(id, bot, card, t.calledShape, call);
 
-        if (t.phase == Phase.Finished) return;
+        if (t.phase == Phase.Finished || t.marketEnd) return;
 
         if (handCount[id][bot] == 0) {
             _finishEmptyHand(id, bot);
@@ -443,7 +456,7 @@ contract Whot {
             t.pendingPick = 0;
             t.pendingKind = 0;
             if (t.nextIndex >= PACK) {
-                _finishByHandCount(id);
+                _beginMarketCount(id);
                 return "General market!";
             }
             uint8 dealt = _dealTo(id, foe, 1);
@@ -466,7 +479,7 @@ contract Whot {
         Table storage t = tables[id];
         for (uint8 i = 0; i < n; i++) {
             if (t.nextIndex >= PACK) {
-                _finishByHandCount(id);
+                _beginMarketCount(id);
                 return dealt;
             }
             uint8 count = handCount[id][player];
@@ -497,22 +510,64 @@ contract Whot {
         emit CheckUp(id, winner);
     }
 
-    /// @dev When the pack runs out, the seated player with fewer cards wins.
-    function _finishByHandCount(uint256 id) internal {
+    /// @dev Pack is empty — reveal remaining sealed cards so their ranks can be summed.
+    function _beginMarketCount(uint256 id) internal {
         Table storage t = tables[id];
-        uint8 h0 = handCount[id][t.player0];
-        uint8 h1 = handCount[id][t.player1];
+        if (t.marketEnd || t.phase == Phase.Finished) return;
 
-        t.phase = Phase.Finished;
         t.marketEnd = true;
         t.pendingPick = 0;
         t.pendingKind = 0;
         t.botPending = false;
         t.botPackedHandle = bytes32(0);
+        _revealHand(id, t.player0);
+        _revealHand(id, t.player1);
+        emit MarketCount(id);
+    }
 
-        if (h0 < h1) {
+    function _revealHand(uint256 id, address player) internal {
+        uint8 n = handCount[id][player];
+        for (uint8 i = 0; i < n; i++) {
+            e.reveal(hands[id][player][i]);
+        }
+    }
+
+    function _sumHand(
+        uint256 id,
+        address player,
+        DecryptionAttestation[] calldata atts,
+        bytes[][] calldata sigs
+    ) internal view returns (uint16 sum) {
+        uint8 n = handCount[id][player];
+        if (atts.length != n || sigs.length != n) revert BadHand();
+        for (uint8 i = 0; i < n; i++) {
+            if (!inco.incoVerifier().isValidDecryptionAttestation(atts[i], sigs[i])) revert BadAttestation();
+            if (atts[i].handle != euint256.unwrap(hands[id][player][i])) revert HandleMismatch();
+            sum += WhotCards.rankOf(WhotCards.cardAt(uint256(atts[i].value)));
+        }
+    }
+
+    /// @notice After the market runs dry, attest every remaining card. Lowest rank sum wins.
+    function settleMarket(
+        uint256 id,
+        DecryptionAttestation[] calldata atts0,
+        bytes[][] calldata sigs0,
+        DecryptionAttestation[] calldata atts1,
+        bytes[][] calldata sigs1
+    ) external {
+        Table storage t = tables[id];
+        if (t.phase != Phase.Live || !t.marketEnd) revert WrongPhase();
+
+        uint16 sum0 = _sumHand(id, t.player0, atts0, sigs0);
+        uint16 sum1 = _sumHand(id, t.player1, atts1, sigs1);
+
+        t.score0 = sum0;
+        t.score1 = sum1;
+        t.phase = Phase.Finished;
+
+        if (sum0 < sum1) {
             t.winner = t.player0;
-        } else if (h1 < h0) {
+        } else if (sum1 < sum0) {
             t.winner = t.player1;
         } else {
             t.winner = address(0);
@@ -592,6 +647,8 @@ contract Whot {
         v.solo = t.vsBot;
         v.botPending_ = t.botPending;
         v.marketEnd_ = t.marketEnd;
+        v.score0_ = t.score0;
+        v.score1_ = t.score1;
     }
 
     function botPackedOf(uint256 id) external view returns (bytes32) {

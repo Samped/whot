@@ -31,7 +31,8 @@ export function friendlyError(err: unknown): string {
     if (key === "illegalcard") return "That card cannot follow the pile.";
     if (key === "needshape") return "WHOT needs a shape call.";
     if (key === "alreadysseated" || key === "alreadyseated") return "You are already at this table.";
-    if (key === "emptymarket") return "The market is dry — hands are counted to decide the winner.";
+    if (key === "emptymarket") return "The market is dry — ranks in each hand are counted.";
+    if (key === "marketsettling") return "Hands are being counted. Hang on.";
     if (key === "wrongphase") return "Table is not ready for that move.";
     if (key === "notable") return "That table does not exist.";
     if (key === "nothost") return "Only the host can cancel this table.";

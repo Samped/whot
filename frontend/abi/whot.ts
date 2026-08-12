@@ -27,6 +27,8 @@ const tableTuple = {
     { name: "solo", type: "bool" },
     { name: "botPending_", type: "bool" },
     { name: "marketEnd_", type: "bool" },
+    { name: "score0_", type: "uint16" },
+    { name: "score1_", type: "uint16" },
   ],
 } as const;
 
@@ -146,6 +148,19 @@ export const whotAbi = [
     type: "function",
     name: "goMarket",
     inputs: [{ name: "id", type: "uint256" }],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "settleMarket",
+    inputs: [
+      { name: "id", type: "uint256" },
+      { name: "atts0", type: "tuple[]", components: att.components },
+      { name: "sigs0", type: "bytes[][]" },
+      { name: "atts1", type: "tuple[]", components: att.components },
+      { name: "sigs1", type: "bytes[][]" },
+    ],
     outputs: [],
     stateMutability: "nonpayable",
   },

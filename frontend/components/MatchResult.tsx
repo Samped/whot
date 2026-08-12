@@ -96,13 +96,13 @@ export function MatchResult({
   const kicker = tie ? "Market finished" : won ? "Check up" : "Hand empty";
   const title = tie ? "Dead heat" : won ? "Congratulations" : "Hard luck";
   const body = tie
-    ? `The market ran dry with ${myCount ?? "?"} vs ${oppCount ?? "?"} sealed cards each.`
+    ? `The market ran dry. Rank sums tied at ${myCount ?? "?"}.`
     : marketEnd
       ? won
-        ? `Market finished. You held ${myCount ?? "?"} — fewer than the ${solo ? "computer" : "friend"}'s ${oppCount ?? "?"}`
+        ? `Market finished. Your ranks added up to ${myCount ?? "?"} — lower than the ${solo ? "computer" : "friend"}'s ${oppCount ?? "?"}.`
         : solo
-          ? `Market finished. The computer held ${oppCount ?? "?"} to your ${myCount ?? "?"}`
-          : `Market finished. They held ${oppCount ?? "?"} to your ${myCount ?? "?"}`
+          ? `Market finished. The computer's ranks summed to ${oppCount ?? "?"} against your ${myCount ?? "?"}.`
+          : `Market finished. Their ranks summed to ${oppCount ?? "?"} against your ${myCount ?? "?"}.`
       : won
         ? "You emptied the hand. The hand is yours."
         : solo

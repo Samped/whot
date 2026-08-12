@@ -537,10 +537,14 @@ function PvpScreen({ tableId }: { tableId: number }) {
   const live = phase === 3;
   const called = game.table?.shape ?? 0;
   const myHandCount = game.seat === 0 ? (game.table?.hand0 ?? 0) : (game.table?.hand1 ?? 0);
+  const myScore = game.seat === 0 ? (game.table?.score0_ ?? 0) : (game.table?.score1_ ?? 0);
+  const oppScore = game.seat === 0 ? (game.table?.score1_ ?? 0) : (game.table?.score0_ ?? 0);
   const tieGame = phase === 4 && isOpen(game.table?.winner_);
+  const countingRanks = Boolean(game.table?.marketEnd_) && phase === 3;
   const legalHint =
     game.myTurn &&
     live &&
+    !countingRanks &&
     game.myCards.some((c) => isLegal(c, top, called, game.table?.pickKind ?? 0));
 
   return (
@@ -570,19 +574,21 @@ function PvpScreen({ tableId }: { tableId: number }) {
           phase === 4
             ? game.table?.marketEnd_
               ? tieGame
-                ? `Market finished — ${myHandCount} cards each.`
+                ? `Market finished — ranks tied at ${myScore}.`
                 : game.address != null &&
                     game.table?.winner_?.toLowerCase() === game.address.toLowerCase()
-                  ? `Market finished — you win with ${myHandCount}.`
+                  ? `Market finished — you win with ${myScore} points.`
                   : game.table?.solo &&
                       game.table.winner_?.toLowerCase() === game.table.p1?.toLowerCase()
-                    ? `Market finished — computer wins with ${game.opponentCount}.`
-                    : `Market finished — ${short(game.table?.winner_)} wins with fewer cards.`
+                    ? `Market finished — computer wins with ${oppScore} points.`
+                    : `Market finished — ${short(game.table?.winner_)} wins with ${oppScore} points.`
               : game.table?.solo &&
                   game.table.winner_?.toLowerCase() === game.table.p1?.toLowerCase()
                 ? "Computer check up."
                 : `Check up! ${short(game.table?.winner_)}`
-            : phase === 2
+            : countingRanks
+              ? game.status || "Counting the ranks in each hand…"
+              : phase === 2
               ? game.status || "Locking the opener…"
               : game.sealedPending > 0
                 ? game.sealedPending > 1
@@ -594,7 +600,7 @@ function PvpScreen({ tableId }: { tableId: number }) {
                     ? legalHint
                       ? "Your turn — dump a card."
                       : game.table?.marketLeft === 0
-                        ? "Market is dry — go market to count hands."
+                        ? "Market is dry — go market to count ranks."
                         : "Nothing follows. Go market."
                     : game.table?.solo
                       ? game.seat < 0
@@ -602,7 +608,7 @@ function PvpScreen({ tableId }: { tableId: number }) {
                         : "Computer is on the move…"
                       : "Friend dey think…"
         }
-        busy={game.busy || game.sealedPending > 0}
+        busy={game.busy || game.sealedPending > 0 || countingRanks}
         peeking={game.peeking}
         sealedPending={game.sealedPending}
         onPlay={game.playCard}
@@ -647,8 +653,8 @@ function PvpScreen({ tableId }: { tableId: number }) {
           }
           tie={tieGame}
           marketEnd={Boolean(game.table?.marketEnd_)}
-          myCount={myHandCount}
-          oppCount={game.opponentCount}
+          myCount={game.table?.marketEnd_ ? myScore : myHandCount}
+          oppCount={game.table?.marketEnd_ ? oppScore : game.opponentCount}
           solo={Boolean(game.table?.solo)}
           onAgain={() => {
             if (game.table?.solo) {
