@@ -1004,6 +1004,7 @@ button.wc {
 }
 
 .wc-logo { width: 30px; height: 42px; border-radius: 4px; }
+.wc-xs { width: 44px; height: 62px; border-radius: 6px; }
 .wc-sm { width: 62px; height: 88px; }
 .wc-md { width: 96px; height: 138px; }
 .wc-lg { width: 118px; height: 168px; }
@@ -1045,6 +1046,13 @@ button.wc {
 .glyph { display: block; }
 .glyph.mini { width: 12px; height: 12px; margin-top: 1px; }
 .glyph.hero { width: 46px; height: 46px; }
+.wc-xs .glyph.hero { width: 18px; height: 18px; }
+.wc-xs .wc-corner b { font-size: 0.72rem; }
+.wc-xs .wc-corner { width: 16px; }
+.wc-xs .glyph.mini { width: 9px; height: 9px; }
+.wc-xs .wc-plate { inset: 2px; border-radius: 4px; }
+.wc-xs .wc-ribbon { font-size: 0.38rem; padding: 1px 3px; }
+.wc-xs .wc-emblem { inset: 14px 4px 16px; }
 .wc-sm .glyph.hero { width: 26px; height: 26px; }
 .wc-lg .glyph.hero { width: 58px; height: 58px; }
 .wc-xl .glyph.hero { width: 78px; height: 78px; }
@@ -1841,25 +1849,53 @@ button.wc {
   color: var(--dust);
 }
 
+.how-calls-label {
+  margin: 1.15rem 0 0.35rem;
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 0.68rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(239, 230, 212, 0.55);
+}
+
 .how-calls {
-  margin: 1.1rem 0 0;
+  margin: 0;
   display: grid;
-  gap: 0.45rem;
+  gap: 0;
 }
 
 .how-calls div {
   display: grid;
-  grid-template-columns: 2.2rem 1fr;
-  gap: 0.7rem;
-  align-items: baseline;
-  padding: 0.4rem 0;
+  grid-template-columns: auto 1fr;
+  gap: 0.85rem;
+  align-items: center;
+  padding: 0.55rem 0;
   border-top: 1px solid rgba(239, 230, 212, 0.12);
 }
 
 .how-calls dt {
-  font-family: var(--font-mono), ui-monospace, monospace;
-  font-size: 0.95rem;
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  margin: 0;
   color: var(--dust);
+}
+
+.how-call-n {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 1.05rem;
+  line-height: 1.1;
+  min-width: 2.4rem;
+}
+
+.how-call-k {
+  font-size: 0.58rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(239, 230, 212, 0.48);
 }
 
 .how-calls dd {

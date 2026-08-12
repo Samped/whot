@@ -361,31 +361,51 @@ function HowSection({ compact = false }: { compact?: boolean }) {
             three must be paid, or answered with the same kind, before you
             can dump anything else.
           </p>
+          <p className="how-calls-label">Specials by card number</p>
           <dl className="how-calls">
-            <div>
-              <dt>1</dt>
-              <dd>Hold on — you play again.</dd>
-            </div>
-            <div>
-              <dt>2</dt>
-              <dd>Pick two — the other seat draws two, unless they dump a 2 (stacks +2).</dd>
-            </div>
-            <div>
-              <dt>5</dt>
-              <dd>Pick three — the other seat draws three, unless they dump a 5 (stacks +3).</dd>
-            </div>
-            <div>
-              <dt>8</dt>
-              <dd>Suspension — skip them. You keep the turn.</dd>
-            </div>
-            <div>
-              <dt>14</dt>
-              <dd>General market — they draw one.</dd>
-            </div>
-            <div>
-              <dt>20</dt>
-              <dd>WHOT — call the shape the table must follow.</dd>
-            </div>
+            {[
+              {
+                card: pack(1, 1),
+                n: "1",
+                text: "Hold on — you play again.",
+              },
+              {
+                card: pack(2, 2),
+                n: "2",
+                text: "Pick two — the other seat draws two, unless they dump a 2 (stacks +2).",
+              },
+              {
+                card: pack(3, 5),
+                n: "5",
+                text: "Pick three — the other seat draws three, unless they dump a 5 (stacks +3).",
+              },
+              {
+                card: pack(5, 8),
+                n: "8",
+                text: "Suspension — skip them. You keep the turn.",
+              },
+              {
+                card: pack(1, 14),
+                n: "14",
+                text: "General market — they draw one.",
+              },
+              {
+                card: pack(6, 20),
+                n: "20",
+                text: "WHOT — call the shape the table must follow.",
+              },
+            ].map((row) => (
+              <div key={row.n}>
+                <dt>
+                  <WhotFace card={decodeCard(row.card)} size="xs" />
+                  <span className="how-call-n">
+                    <span className="how-call-k">Card no.</span>
+                    {row.n}
+                  </span>
+                </dt>
+                <dd>{row.text}</dd>
+              </div>
+            ))}
           </dl>
         </article>
 
