@@ -504,7 +504,11 @@ contract Whot {
         t.pendingKind = 0;
         t.botPending = false;
         t.botPackedHandle = bytes32(0);
-        if (!t.vsBot) {
+        if (t.vsBot) {
+            address human = t.player0;
+            if (winner == human) _recordSolo(human, true);
+            else _recordSolo(human, false);
+        } else {
             _record(winner, winner == t.player0 ? t.player1 : t.player0);
         }
         emit CheckUp(id, winner);
@@ -573,7 +577,15 @@ contract Whot {
             t.winner = address(0);
         }
 
-        if (!t.vsBot && t.winner != address(0)) {
+        if (t.vsBot) {
+            address human = t.player0;
+            if (t.winner == human) _recordSolo(human, true);
+            else if (t.winner != address(0)) _recordSolo(human, false);
+            else {
+                _track(human);
+                stats[human].played += 1;
+            }
+        } else if (t.winner != address(0)) {
             _record(t.winner, t.winner == t.player0 ? t.player1 : t.player0);
         }
         emit CheckUp(id, t.winner);
@@ -606,6 +618,14 @@ contract Whot {
         l.played += 1;
         _track(win);
         _track(lose);
+    }
+
+    function _recordSolo(address player, bool won) internal {
+        Stats storage s = stats[player];
+        if (won) s.wins += 1;
+        else s.losses += 1;
+        s.played += 1;
+        _track(player);
     }
 
     function mySeat(uint256 id) external view returns (int8) {

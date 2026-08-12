@@ -1,0 +1,244 @@
+"use client";
+
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useReadContract } from "wagmi";
+import { encodeFunctionData, type Address, type Hex } from "viem";
+import { toast } from "sonner";
+import { socialAbi } from "@/abi/social";
+import { useGameAccount } from "@/hooks/useGameAccount";
+import { publicRpc, walletFor } from "@/lib/game-account";
+import { activeChain } from "@/lib/network";
+import {
+  displayName,
+  emptyProfile,
+  parseProfile,
+  SOCIAL_ADDRESS,
+  type PlayerProfile,
+} from "@/lib/social";
+import { tableCode, tableHref } from "@/lib/table-code";
+
+export type OpenInvite = {
+  index: number;
+  from: Address;
+  tableId: number;
+  createdAt: number;
+  fromName?: string;
+};
+
+const SEEN_KEY = "whot.inviteSeen.v1";
+
+function seenKey(owner?: string) {
+  return `${SEEN_KEY}.${(owner || "anon").toLowerCase()}`;
+}
+
+function readSeen(owner?: string): number {
+  if (typeof window === "undefined" || !owner) return 0;
+  return Number(window.localStorage.getItem(seenKey(owner)) || 0);
+}
+
+function writeSeen(owner: string | undefined, at: number) {
+  if (typeof window === "undefined" || !owner) return;
+  window.localStorage.setItem(seenKey(owner), String(at));
+}
+
+export function useSocial() {
+  const game = useGameAccount();
+  const { address, signedIn, account } = game;
+  const enabled = Boolean(SOCIAL_ADDRESS) && SOCIAL_ADDRESS !== "0x0000000000000000000000000000000000000000";
+
+  const profileQuery = useReadContract({
+    address: SOCIAL_ADDRESS,
+    abi: socialAbi,
+    functionName: "profileOf",
+    args: address ? [address] : undefined,
+    query: { enabled: enabled && Boolean(address), refetchInterval: 8_000 },
+  });
+
+  const invitesQuery = useReadContract({
+    address: SOCIAL_ADDRESS,
+    abi: socialAbi,
+    functionName: "invitesOf",
+    args: address ? [address] : undefined,
+    query: { enabled: enabled && signedIn && Boolean(address), refetchInterval: 3_500 },
+  });
+
+  const profile = useMemo(
+    () => (profileQuery.data ? parseProfile(profileQuery.data) : emptyProfile()),
+    [profileQuery.data],
+  );
+
+  const invites = useMemo<OpenInvite[]>(() => {
+    const raw = invitesQuery.data as
+      | readonly { from: Address; tableId: bigint | number; createdAt: bigint | number; open: boolean }[]
+      | undefined;
+    if (!raw) return [];
+    return raw
+      .map((row, index) => ({
+        index,
+        from: row.from,
+        tableId: Number(row.tableId),
+        createdAt: Number(row.createdAt),
+        open: row.open,
+      }))
+      .filter((row) => row.open && row.tableId > 0)
+      .sort((a, b) => b.createdAt - a.createdAt);
+  }, [invitesQuery.data]);
+
+  const [names, setNames] = useState<Record<string, string>>({});
+  const toasted = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    if (!enabled || invites.length === 0) return;
+    const missing = invites.map((i) => i.from).filter((a) => !names[a.toLowerCase()]);
+    if (missing.length === 0) return;
+    let stop = false;
+    void (async () => {
+      try {
+        const rows = (await publicRpc().readContract({
+          address: SOCIAL_ADDRESS,
+          abi: socialAbi,
+          functionName: "profilesOf",
+          args: [missing],
+        })) as unknown[];
+        if (stop) return;
+        const next = { ...names };
+        missing.forEach((addr, i) => {
+          next[addr.toLowerCase()] = displayName(parseProfile(rows[i]), addr);
+        });
+        setNames(next);
+      } catch {
+        /* ignore */
+      }
+    })();
+    return () => {
+      stop = true;
+    };
+  }, [enabled, invites, names]);
+
+  const openInvites = useMemo(
+    () =>
+      invites.map((row) => ({
+        ...row,
+        fromName: names[row.from.toLowerCase()] || displayName(undefined, row.from),
+      })),
+    [invites, names],
+  );
+
+  useEffect(() => {
+    if (!signedIn || !address || openInvites.length === 0) return;
+    const seen = readSeen(address);
+    for (const invite of openInvites) {
+      const key = `${invite.from}-${invite.tableId}-${invite.index}`;
+      if (invite.createdAt <= seen) continue;
+      if (toasted.current.has(key)) continue;
+      toasted.current.add(key);
+      toast.message(`${invite.fromName} invited you`, {
+        description: `Table ${tableCode(invite.tableId)} · tap to sit`,
+        action: {
+          label: "Open",
+          onClick: () => {
+            window.location.href = tableHref(invite.tableId);
+          },
+        },
+        duration: 10_000,
+      });
+    }
+    const newest = Math.max(...openInvites.map((i) => i.createdAt), seen);
+    writeSeen(address, newest);
+  }, [openInvites, signedIn, address]);
+
+  const sendTx = useCallback(
+    async (functionName: string, args: readonly unknown[]) => {
+      if (!address || !account) throw new Error("Sign in first.");
+      const rec = account;
+      const wallet = walletFor(rec);
+      const data = encodeFunctionData({
+        abi: socialAbi,
+        functionName: functionName as never,
+        args: args as never,
+      });
+      const hash = await wallet.sendTransaction({
+        to: SOCIAL_ADDRESS,
+        data,
+        account: wallet.account,
+        chain: activeChain,
+        gas: 450_000n,
+        maxFeePerGas: 1_000_000_000n,
+        maxPriorityFeePerGas: 10_000_000n,
+      });
+      await publicRpc().waitForTransactionReceipt({ hash, timeout: 90_000 });
+      await Promise.all([profileQuery.refetch(), invitesQuery.refetch()]);
+      return hash as Hex;
+    },
+    [address, account, profileQuery, invitesQuery],
+  );
+
+  const saveProfile = useCallback(
+    async (next: { nickname: string; avatar: number; email: string }) => {
+      const nickname = next.nickname.trim().slice(0, 20);
+      if (!nickname) throw new Error("Pick a nickname.");
+      await sendTx("setProfile", [nickname, next.avatar, next.email.trim().toLowerCase()]);
+    },
+    [sendTx],
+  );
+
+  const sendInvite = useCallback(
+    async (to: Address, tableId: number, toEmail?: string, fromName?: string) => {
+      await sendTx("invite", [to, BigInt(tableId)]);
+      if (toEmail) {
+        void fetch("/api/invite-email", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            toEmail,
+            fromName: fromName || profile.nickname || "A WHOT player",
+            tableCode: tableCode(tableId),
+            link:
+              typeof window !== "undefined"
+                ? `${window.location.origin}${tableHref(tableId)}`
+                : tableHref(tableId),
+          }),
+        }).catch(() => undefined);
+      }
+    },
+    [sendTx, profile.nickname],
+  );
+
+  const dismissInvite = useCallback(
+    async (index: number) => {
+      await sendTx("closeInvite", [BigInt(index)]);
+    },
+    [sendTx],
+  );
+
+  const loadProfiles = useCallback(async (players: Address[]) => {
+    if (!enabled || players.length === 0) return {} as Record<string, PlayerProfile>;
+    const rows = (await publicRpc().readContract({
+      address: SOCIAL_ADDRESS,
+      abi: socialAbi,
+      functionName: "profilesOf",
+      args: [players],
+    })) as unknown[];
+    const map: Record<string, PlayerProfile> = {};
+    players.forEach((addr, i) => {
+      map[addr.toLowerCase()] = parseProfile(rows[i]);
+    });
+    return map;
+  }, [enabled]);
+
+  return {
+    enabled,
+    profile,
+    openInvites,
+    inviteCount: openInvites.length,
+    saveProfile,
+    sendInvite,
+    dismissInvite,
+    loadProfiles,
+    refetch: async () => {
+      await Promise.all([profileQuery.refetch(), invitesQuery.refetch()]);
+    },
+  };
+}
+
+export type SocialApi = ReturnType<typeof useSocial>;

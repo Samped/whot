@@ -305,13 +305,17 @@ export function TableFelt({
             <div className="pile discard open-pile" ref={pileRef}>
               <div key={seatTick} className={seatTick ? "pile-face is-seat" : "pile-face"}>
                 {pile ? <WhotFace card={pile} size="xl" /> : <WhotBack size="xl" />}
+                {lastCall ? (
+                  <span className="call-chip" role="status">
+                    {lastCall}
+                  </span>
+                ) : null}
               </div>
               <span className="open-label">
                 {pile
                   ? `Open · ${pile.rank === 20 ? "WHOT" : pile.rank} ${SHAPE_NAME[pile.shape] || ""}`
                   : "Opening the pile…"}
               </span>
-              {lastCall ? <span className="call-chip">{lastCall}</span> : null}
             </div>
             <div
               className={`follow-chip s-${shapeName}${tight ? " is-compact" : ""}`}
@@ -398,8 +402,8 @@ export function TableFelt({
       {flyer ? <FlyCard flyer={flyer} onDone={finishFly} /> : null}
 
       {pickShapeFor !== null && (
-        <div className="modal">
-          <div className="sheet">
+        <div className="modal shape-modal">
+          <div className="sheet shape-sheet">
             <p className="sheet-kicker">WHOT</p>
             <h3>Call a shape</h3>
             <div className="shape-grid">

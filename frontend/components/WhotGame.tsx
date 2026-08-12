@@ -13,7 +13,11 @@ import { MatchResult } from "@/components/MatchResult";
 import { CardSlot, ShapeGlyph, WhotBack, WhotFace } from "@/components/WhotCard";
 import { decodeCard, isLegal, pack } from "@/lib/whot";
 import { useGameAccount } from "@/hooks/useGameAccount";
+import { useSocialApi } from "@/hooks/SocialProvider";
 import { isOpen } from "@/lib/table-view";
+import { ProfileDash } from "@/components/ProfileDash";
+import { displayName, type PlayerProfile } from "@/lib/social";
+import type { Address } from "viem";
 
 const SHOW = [
   pack(1, 2),
@@ -35,9 +39,11 @@ export function WhotGame() {
         ? "how"
         : params.get("board") === "1"
           ? "board"
-          : params.get("play") === "solo"
-            ? "solo"
-            : "home";
+          : params.get("me") === "1"
+            ? "me"
+            : params.get("play") === "solo"
+              ? "solo"
+              : "home";
 
   return (
     <div className="app-shell">
@@ -46,6 +52,7 @@ export function WhotGame() {
       {view === "solo" && <SoloGate />}
       {view === "pvp" && <PvpScreen tableId={tableId} />}
       {view === "board" && <BoardScreen onHome={() => router.push("/")} />}
+      {view === "me" && <ProfileDash onHome={() => router.push("/")} />}
     </div>
   );
 }
@@ -55,14 +62,22 @@ function Home({ onBoard }: { onBoard: () => void }) {
   const game = useWhot(0);
   const board = useLeaderboard();
   const recent = useRecentTables();
+  const social = useSocialApi();
   const { signedIn, requestLogin, address } = useGameAccount();
   const [code, setCode] = useState("");
   const [hosting, setHosting] = useState(false);
   const [startingSolo, setStartingSolo] = useState(false);
+  const [names, setNames] = useState<Record<string, PlayerProfile>>({});
 
   useEffect(() => {
     if (game.error) toast.error(game.error);
   }, [game.error]);
+
+  useEffect(() => {
+    const addrs = board.rows.slice(0, 5).map((r) => r.address);
+    if (!addrs.length) return;
+    void social.loadProfiles(addrs).then(setNames);
+  }, [board.rows, social]);
 
   function needLogin() {
     if (signedIn) return false;
@@ -202,6 +217,38 @@ function Home({ onBoard }: { onBoard: () => void }) {
         </aside>
       </section>
 
+      {signedIn && social.openInvites.length > 0 && (
+        <section className="invite-panel home-invites">
+          <header>
+            <h2>Invites</h2>
+            <button className="btn ghost" type="button" onClick={() => router.push("/?me=1")}>
+              Dashboard
+            </button>
+          </header>
+          <ol className="invite-list">
+            {social.openInvites.map((invite) => (
+              <li key={`${invite.index}-${invite.tableId}`}>
+                <button
+                  className="invite-main"
+                  type="button"
+                  onClick={() => router.push(tableHref(invite.tableId))}
+                >
+                  <span className="invite-from">{invite.fromName}</span>
+                  <span className="invite-meta">Table {tableCode(invite.tableId)} · sit now</span>
+                </button>
+                <button
+                  className="invite-dismiss"
+                  type="button"
+                  onClick={() => void social.dismissInvite(invite.index)}
+                >
+                  ×
+                </button>
+              </li>
+            ))}
+          </ol>
+        </section>
+      )}
+
       {signedIn && recent.rows.length > 0 && (
         <section className="recent-tables">
           <header>
@@ -254,13 +301,15 @@ function Home({ onBoard }: { onBoard: () => void }) {
           {board.rows.slice(0, 5).map((row, i) => (
             <li key={row.address}>
               <span className="pos">{i + 1}</span>
-              <span className="who">{short(row.address)}</span>
+              <span className="who">
+                {displayName(names[row.address.toLowerCase()], row.address)}
+              </span>
               <span className="wl">
                 {row.wins}W · {row.losses}L
               </span>
             </li>
           ))}
-          {board.rows.length === 0 && <li className="empty">No friend matches yet.</li>}
+          {board.rows.length === 0 && <li className="empty">Nobody don check up yet.</li>}
         </ol>
       </section>
     </div>
@@ -677,7 +726,50 @@ function PvpScreen({ tableId }: { tableId: number }) {
 }
 
 function BoardScreen({ onHome }: { onHome: () => void }) {
+  const router = useRouter();
   const board = useLeaderboard();
+  const social = useSocialApi();
+  const game = useWhot(0);
+  const { address, signedIn, requestLogin } = useGameAccount();
+  const [names, setNames] = useState<Record<string, PlayerProfile>>({});
+  const [inviting, setInviting] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!board.rows.length) return;
+    void social.loadProfiles(board.rows.map((r) => r.address)).then(setNames);
+  }, [board.rows, social]);
+
+  async function invitePlayer(target: Address) {
+    if (!signedIn) {
+      requestLogin();
+      toast.error("Sign in first.");
+      return;
+    }
+    if (address && target.toLowerCase() === address.toLowerCase()) {
+      toast.error("That is your own seat.");
+      return;
+    }
+    setInviting(target.toLowerCase());
+    try {
+      const id = await game.openTable();
+      if (!id) throw new Error("Could not open a table.");
+      if (address) rememberTable(address, { id, solo: false, seat: 0 });
+      const profile = names[target.toLowerCase()];
+      await social.sendInvite(
+        target,
+        id,
+        profile?.email || undefined,
+        social.profile.nickname || undefined,
+      );
+      toast.success(`Invite sent · table ${tableCode(id)}`);
+      router.push(tableHref(id));
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Invite failed");
+    } finally {
+      setInviting(null);
+    }
+  }
+
   return (
     <div className="board-screen">
       <div className="play-top">
@@ -688,7 +780,8 @@ function BoardScreen({ onHome }: { onHome: () => void }) {
         <span />
       </div>
       <p className="lede slim">
-        Wins from friend matches. Computer games stay on your device.
+        Every player who checks up lands here — friend matches and computer games. Invite anyone
+        straight to a table.
       </p>
       {board.address && (
         <div className="you-card">
@@ -698,19 +791,38 @@ function BoardScreen({ onHome }: { onHome: () => void }) {
           </strong>
         </div>
       )}
-      <ol className="ladder">
-        {board.rows.map((row, i) => (
-          <li key={row.address} className={i < 3 ? "podium" : ""}>
-            <span className="pos">{i + 1}</span>
-            <span className="who">{short(row.address)}</span>
-            <span className="bar">
-              <i style={{ width: `${Math.max(8, row.rate * 100)}%` }} />
-            </span>
-            <span className="wl">
-              {row.wins}W · {row.losses}L
-            </span>
-          </li>
-        ))}
+      <ol className="ladder ladder-invite">
+        {board.rows.map((row, i) => {
+          const profile = names[row.address.toLowerCase()];
+          const mine = address && row.address.toLowerCase() === address.toLowerCase();
+          return (
+            <li key={row.address} className={i < 3 ? "podium" : ""}>
+              <span className="pos">{i + 1}</span>
+              <span className="who">
+                <span className="who-name">{displayName(profile, row.address)}</span>
+                {profile?.set ? (
+                  <span className="who-sub">{short(row.address)}</span>
+                ) : null}
+              </span>
+              <span className="bar">
+                <i style={{ width: `${Math.max(8, row.rate * 100)}%` }} />
+              </span>
+              <span className="wl">
+                {row.wins}W · {row.losses}L
+              </span>
+              {!mine && (
+                <button
+                  className="btn ghost invite-btn"
+                  type="button"
+                  disabled={Boolean(inviting) || game.busy || !social.enabled}
+                  onClick={() => void invitePlayer(row.address)}
+                >
+                  {inviting === row.address.toLowerCase() ? "…" : "Invite"}
+                </button>
+              )}
+            </li>
+          );
+        })}
         {board.rows.length === 0 && <li className="empty">Nobody don check up yet.</li>}
       </ol>
     </div>

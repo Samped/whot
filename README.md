@@ -8,13 +8,15 @@ Inco is **TEE-based**. Each hand stays sealed until that card is dumped. Settlem
 
 1. Open [https://whatcards.vercel.app/](https://whatcards.vercel.app/)
 2. **Play the computer** — no wallet
-3. **Host a table** — copy the number or `/?t=0007` and send it
+3. **Host a table** — copy the code or `/?t=2Z7AE6` and send it, or invite from Ranked
 4. Friend sits, pack shuffles, hands stay sealed
-5. Ranked board records friend-match wins
+5. Ranked board records wins from friend matches and computer games
 
 Specials: 1 Hold on · 2 Pick two · 5 Pick three · 8 Suspension · 14 General market · 20 WHOT (call a shape)
 
 When the market runs out, the ranks on every remaining card are added up — **lowest total wins**. Equal totals are a tie.
+
+Tap your email / account chip for the **dashboard** (nickname, avatar, wins/losses, invites). Link an email there so ranked invites can also land in your inbox (needs `RESEND_API_KEY`).
 
 ## Layout
 

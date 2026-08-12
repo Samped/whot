@@ -19,11 +19,21 @@ export function useLeaderboard() {
   const { address } = useGameAccount();
   const enabled = Boolean(WHOT_ADDRESS);
 
+  const lengthQuery = useReadContract({
+    address: WHOT_ADDRESS,
+    abi: whotAbi,
+    functionName: "ladderLength",
+    query: { enabled, refetchInterval: 12_000 },
+  });
+
+  const ladderLen = Number(lengthQuery.data ?? 0n);
+  const limit = ladderLen > 0 ? BigInt(Math.min(ladderLen, 500)) : 80n;
+
   const ladderQuery = useReadContract({
     address: WHOT_ADDRESS,
     abi: whotAbi,
     functionName: "getLadder",
-    args: [0n, 80n],
+    args: [0n, limit],
     query: { enabled, refetchInterval: 12_000 },
   });
 
@@ -61,5 +71,5 @@ export function useLeaderboard() {
     ? rows.findIndex((r) => r.address.toLowerCase() === address.toLowerCase()) + 1
     : 0;
 
-  return { rows, mine, rank, address, configured: enabled };
+  return { rows, mine, rank, address, configured: enabled, total: ladderLen || rows.length };
 }

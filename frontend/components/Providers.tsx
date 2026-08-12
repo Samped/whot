@@ -19,6 +19,7 @@ import {
 import { ThemeProvider, useTheme } from "next-themes";
 import { activeChain } from "@/lib/network";
 import { GameAccountProvider } from "@/hooks/useGameAccount";
+import { SocialProvider } from "@/hooks/SocialProvider";
 
 const queryClient = new QueryClient();
 
@@ -78,7 +79,9 @@ const Providers = ({ children }: { children: ReactNode }) => {
       <WagmiProvider config={config}>
         <QueryClientProvider client={queryClient}>
           <RainbowKitWithTheme>
-            <GameAccountProvider>{children}</GameAccountProvider>
+            <GameAccountProvider>
+              <SocialProvider>{children}</SocialProvider>
+            </GameAccountProvider>
           </RainbowKitWithTheme>
         </QueryClientProvider>
       </WagmiProvider>
