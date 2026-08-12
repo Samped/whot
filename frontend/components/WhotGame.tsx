@@ -5,7 +5,9 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { formatEther } from "viem";
 import { useLeaderboard } from "@/hooks/useLeaderboard";
-import { parseTableCode, tableCode, useWhot } from "@/hooks/useWhot";
+import { useRecentTables } from "@/hooks/useRecentTables";
+import { tableCode, tableHref, parseTableCode, useWhot } from "@/hooks/useWhot";
+import { rememberTable } from "@/lib/recent-tables";
 import { TableFelt } from "@/components/TableFelt";
 import { MatchResult } from "@/components/MatchResult";
 import { CardSlot, ShapeGlyph, WhotBack, WhotFace } from "@/components/WhotCard";
@@ -52,7 +54,8 @@ function Home({ onBoard }: { onBoard: () => void }) {
   const router = useRouter();
   const game = useWhot(0);
   const board = useLeaderboard();
-  const { signedIn, requestLogin } = useGameAccount();
+  const recent = useRecentTables();
+  const { signedIn, requestLogin, address } = useGameAccount();
   const [code, setCode] = useState("");
   const [hosting, setHosting] = useState(false);
   const [startingSolo, setStartingSolo] = useState(false);
@@ -68,12 +71,21 @@ function Home({ onBoard }: { onBoard: () => void }) {
     return true;
   }
 
+  function remember(id: number, solo: boolean, seat = -1) {
+    if (!address || id <= 0) return;
+    rememberTable(address, { id, solo, seat });
+    void recent.refresh();
+  }
+
   async function host() {
     if (needLogin()) return;
     setHosting(true);
     const id = await game.openTable();
     setHosting(false);
-    if (id > 0) router.push(`/?t=${id}`);
+    if (id > 0) {
+      remember(id, false, 0);
+      router.push(tableHref(id));
+    }
   }
 
   async function playComputer() {
@@ -81,17 +93,21 @@ function Home({ onBoard }: { onBoard: () => void }) {
     setStartingSolo(true);
     const id = await game.openSolo();
     setStartingSolo(false);
-    if (id > 0) router.push(`/?t=${id}`);
+    if (id > 0) {
+      remember(id, true, 0);
+      router.push(tableHref(id));
+    }
   }
 
   function join() {
     if (needLogin()) return;
     const id = parseTableCode(code);
     if (!id) {
-      toast.error("Enter a table number");
+      toast.error("Enter a table code");
       return;
     }
-    router.push(`/?t=${id}`);
+    remember(id, false);
+    router.push(tableHref(id));
   }
 
   return (
@@ -153,7 +169,7 @@ function Home({ onBoard }: { onBoard: () => void }) {
         <aside className="ticket">
           <h2>Play a friend</h2>
           <p>
-            Host a table, send the number. Both hands stay sealed on-chain until
+            Host a table, send the code. Both hands stay sealed on-chain until
             a card is dumped.
           </p>
           <button className="btn primary" onClick={host} disabled={hosting || startingSolo || game.busy}>
@@ -166,14 +182,17 @@ function Home({ onBoard }: { onBoard: () => void }) {
             }}
           >
             <label htmlFor="table-code">
-              Or enter a number
+              Or enter a code
               <input
                 id="table-code"
-                inputMode="numeric"
-                placeholder="0007"
+                inputMode="text"
+                autoCapitalize="characters"
+                autoCorrect="off"
+                spellCheck={false}
+                placeholder="Z7AE0K"
                 value={code}
-                onChange={(e) => setCode(e.target.value)}
-                maxLength={6}
+                onChange={(e) => setCode(e.target.value.toUpperCase())}
+                maxLength={8}
               />
             </label>
             <button type="submit" className="btn ghost">
@@ -182,6 +201,39 @@ function Home({ onBoard }: { onBoard: () => void }) {
           </form>
         </aside>
       </section>
+
+      {signedIn && recent.rows.length > 0 && (
+        <section className="recent-tables">
+          <header>
+            <h2>Your tables</h2>
+            <p className="lede slim">Jump back into a table you left.</p>
+          </header>
+          <ol className="recent-list">
+            {recent.rows.map((row) => (
+              <li key={row.id} className={row.alive ? "live" : "done"}>
+                <button
+                  className="recent-main"
+                  type="button"
+                  onClick={() => router.push(tableHref(row.id))}
+                >
+                  <span className="recent-code">{tableCode(row.id)}</span>
+                  <span className="recent-meta">
+                    {row.solo ? "Computer" : "Friend"} · {row.status}
+                  </span>
+                </button>
+                <button
+                  className="recent-dismiss"
+                  type="button"
+                  aria-label={`Remove table ${tableCode(row.id)}`}
+                  onClick={() => recent.dismiss(row.id)}
+                >
+                  ×
+                </button>
+              </li>
+            ))}
+          </ol>
+        </section>
+      )}
 
       <HowSection compact />
 
@@ -343,7 +395,7 @@ function HowSection({ compact = false }: { compact?: boolean }) {
 function SoloGate() {
   const router = useRouter();
   const game = useWhot(0);
-  const { signedIn, requestLogin } = useGameAccount();
+  const { signedIn, requestLogin, address } = useGameAccount();
   const [starting, setStarting] = useState(false);
 
   useEffect(() => {
@@ -359,7 +411,10 @@ function SoloGate() {
     setStarting(true);
     const id = await game.openSolo();
     setStarting(false);
-    if (id > 0) router.replace(`/?t=${id}`);
+    if (id > 0) {
+      if (address) rememberTable(address, { id, solo: true, seat: 0 });
+      router.replace(tableHref(id));
+    }
   }
 
   return (
@@ -383,16 +438,26 @@ function SoloGate() {
 function PvpScreen({ tableId }: { tableId: number }) {
   const router = useRouter();
   const game = useWhot(tableId);
+  const { address } = useGameAccount();
   const phase = game.table?.phase_ ?? 0;
   const top = game.table?.top ? decodeCard(game.table.top) : null;
   const link = useMemo(() => {
     if (typeof window === "undefined") return "";
-    return `${window.location.origin}/?t=${tableId}`;
+    return `${window.location.origin}${tableHref(tableId)}`;
   }, [tableId]);
 
   useEffect(() => {
     if (game.error) toast.error(game.error);
   }, [game.error]);
+
+  useEffect(() => {
+    if (!address || tableId <= 0 || !game.table || game.table.phase_ === 0) return;
+    rememberTable(address, {
+      id: tableId,
+      solo: Boolean(game.table.solo),
+      seat: game.seat,
+    });
+  }, [address, tableId, game.table, game.seat]);
 
   async function copy(text: string) {
     try {
@@ -430,10 +495,10 @@ function PvpScreen({ tableId }: { tableId: number }) {
       <div className="center-card ticket">
         <p className="kicker">Private table</p>
         <h2>{tableCode(tableId)}</h2>
-        <p>Send this number or the link. Hands encrypt when the second account sits.</p>
+        <p>Send this code or the link. Hands encrypt when the second account sits.</p>
         <div className="copy-row">
           <button className="btn primary" onClick={() => copy(tableCode(tableId))}>
-            Copy number
+            Copy code
           </button>
           <button className="btn ghost" onClick={() => copy(link)}>
             Copy link
@@ -589,7 +654,10 @@ function PvpScreen({ tableId }: { tableId: number }) {
             if (game.table?.solo) {
               void (async () => {
                 const id = await game.openSolo();
-                if (id > 0) router.replace(`/?t=${id}`);
+                if (id > 0) {
+                  if (address) rememberTable(address, { id, solo: true, seat: 0 });
+                  router.replace(tableHref(id));
+                }
               })();
               return;
             }

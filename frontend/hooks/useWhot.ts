@@ -12,6 +12,7 @@ import { activeChain } from "@/lib/network";
 import { useGameAccount } from "@/hooks/useGameAccount";
 import { publicRpc } from "@/lib/game-account";
 import { computerToPlay, isOpen, parseTable, type TableView } from "@/lib/table-view";
+import { parseTableCode, tableCode, tableHref } from "@/lib/table-code";
 
 type BotBody = {
   error?: string;
@@ -97,14 +98,7 @@ async function withTimeout<T>(promise: Promise<T>, ms: number, message: string):
   }
 }
 
-export function tableCode(id: number) {
-  return String(id).padStart(4, "0");
-}
-
-export function parseTableCode(raw: string) {
-  const n = Number(String(raw).replace(/\D/g, ""));
-  return Number.isFinite(n) && n > 0 ? n : 0;
-}
+export { tableCode, parseTableCode, tableHref };
 
 export function useWhot(tableId: number) {
   const gameAccount = useGameAccount();
