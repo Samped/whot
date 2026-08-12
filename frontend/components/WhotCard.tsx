@@ -3,7 +3,7 @@
 import type { CSSProperties, ReactNode } from "react";
 import { specialCall, type WhotCard } from "@/lib/whot";
 
-type Size = "logo" | "xs" | "sm" | "md" | "lg" | "xl";
+type Size = "logo" | "sm" | "md" | "lg" | "xl";
 
 const SHAPE_CLASS = ["", "circle", "triangle", "cross", "square", "star", "whot"] as const;
 

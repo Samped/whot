@@ -9,7 +9,7 @@ import { Toaster } from "sonner";
 export const metadata: Metadata = {
   title: "WHOT",
   description:
-    "Nigerian WHOT. Play the computer now, or host a table and send the number to a friend.",
+    "African WHOT. Play the computer now, or host a table and send the number to a friend.",
 };
 
 export const viewport: Viewport = {

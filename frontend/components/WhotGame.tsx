@@ -341,7 +341,7 @@ function HowSection({ compact = false }: { compact?: boolean }) {
         <p className="eyebrow">The table and the seal</p>
         <h2>How this pack plays.</h2>
         <p className="lede slim">
-          Same Nigerian WHOT you already know. The only change is the hand:
+          Same African WHOT you already know. The only change is the hand:
           sealed on-chain, opened only to you, public the moment it hits the
           pile.
         </p>
@@ -397,7 +397,9 @@ function HowSection({ compact = false }: { compact?: boolean }) {
             ].map((row) => (
               <div key={row.n}>
                 <dt>
-                  <WhotFace card={decodeCard(row.card)} size="xs" />
+                  <span className="how-call-card">
+                    <WhotFace card={decodeCard(row.card)} size="md" />
+                  </span>
                   <span className="how-call-n">
                     <span className="how-call-k">Card no.</span>
                     {row.n}
