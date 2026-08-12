@@ -27,22 +27,28 @@ function Nav() {
   );
 }
 
+function shortAddr(addr: string) {
+  return `${addr.slice(0, 6)}…${addr.slice(-4)}`;
+}
+
 function AccountChip() {
-  const { account, mode, walletAddress, signOut, funding, signedIn } = useGameAccount();
-  const label = funding
-    ? "Funding…"
-    : mode === "email" && account?.email
-      ? account.email
-      : mode === "wallet" && walletAddress
-        ? `${walletAddress.slice(0, 6)}…${walletAddress.slice(-4)}`
-        : "";
+  const { account, mode, walletAddress, address, signOut, funding, signedIn } = useGameAccount();
 
   return (
     <div className="account-bar">
-      {signedIn && label && (
-        <span className="ghost-btn session-chip" title={label}>
-          {label}
+      {signedIn && !funding && mode === "email" && account?.email && address && (
+        <span className="ghost-btn session-chip" title={`${account.email} · ${address}`}>
+          <span className="session-email">{account.email}</span>
+          <span className="session-addr">{shortAddr(address)}</span>
         </span>
+      )}
+      {signedIn && !funding && mode === "wallet" && walletAddress && (
+        <span className="ghost-btn session-chip" title={walletAddress}>
+          {shortAddr(walletAddress)}
+        </span>
+      )}
+      {signedIn && funding && (
+        <span className="ghost-btn session-chip">Funding…</span>
       )}
       {signedIn ? (
         <button className="ghost-btn" type="button" onClick={signOut}>
