@@ -19,6 +19,7 @@ export type TableView = {
   marketLeft: number;
   solo: boolean;
   botPending_: boolean;
+  marketEnd_: boolean;
 };
 
 export function isOpen(addr?: string) {
@@ -46,6 +47,7 @@ export function parseTable(raw: unknown): TableView | undefined {
     marketLeft: Number(get(13, "marketLeft")),
     solo: Boolean(get(14, "solo")),
     botPending_: Boolean(get(15, "botPending_")),
+    marketEnd_: Boolean(get(16, "marketEnd_")),
   };
 }
 

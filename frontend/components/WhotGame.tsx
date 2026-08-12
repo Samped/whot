@@ -471,6 +471,8 @@ function PvpScreen({ tableId }: { tableId: number }) {
 
   const live = phase === 3;
   const called = game.table?.shape ?? 0;
+  const myHandCount = game.seat === 0 ? (game.table?.hand0 ?? 0) : (game.table?.hand1 ?? 0);
+  const tieGame = phase === 4 && isOpen(game.table?.winner_);
   const legalHint =
     game.myTurn &&
     live &&
@@ -501,9 +503,20 @@ function PvpScreen({ tableId }: { tableId: number }) {
         lastPlayed={game.lastPlayed}
         banner={
           phase === 4
-            ? game.table?.solo && game.table.winner_?.toLowerCase() === game.table.p1?.toLowerCase()
-              ? "Computer check up."
-              : `Check up! ${short(game.table?.winner_)}`
+            ? game.table?.marketEnd_
+              ? tieGame
+                ? `Market finished — ${myHandCount} cards each.`
+                : game.address != null &&
+                    game.table?.winner_?.toLowerCase() === game.address.toLowerCase()
+                  ? `Market finished — you win with ${myHandCount}.`
+                  : game.table?.solo &&
+                      game.table.winner_?.toLowerCase() === game.table.p1?.toLowerCase()
+                    ? `Market finished — computer wins with ${game.opponentCount}.`
+                    : `Market finished — ${short(game.table?.winner_)} wins with fewer cards.`
+              : game.table?.solo &&
+                  game.table.winner_?.toLowerCase() === game.table.p1?.toLowerCase()
+                ? "Computer check up."
+                : `Check up! ${short(game.table?.winner_)}`
             : phase === 2
               ? game.status || "Locking the opener…"
               : game.sealedPending > 0
@@ -515,7 +528,9 @@ function PvpScreen({ tableId }: { tableId: number }) {
                   : game.myTurn
                     ? legalHint
                       ? "Your turn — dump a card."
-                      : "Nothing follows. Go market."
+                      : game.table?.marketLeft === 0
+                        ? "Market is dry — go market to count hands."
+                        : "Nothing follows. Go market."
                     : game.table?.solo
                       ? game.seat < 0
                         ? "Watching this table."
@@ -558,9 +573,17 @@ function PvpScreen({ tableId }: { tableId: number }) {
           </>
         }
       />
-      {phase === 4 && game.seat >= 0 && !isOpen(game.table?.winner_) && (
+      {phase === 4 && game.seat >= 0 && (
         <MatchResult
-          won={game.address != null && game.table?.winner_?.toLowerCase() === game.address.toLowerCase()}
+          won={
+            !tieGame &&
+            game.address != null &&
+            game.table?.winner_?.toLowerCase() === game.address.toLowerCase()
+          }
+          tie={tieGame}
+          marketEnd={Boolean(game.table?.marketEnd_)}
+          myCount={myHandCount}
+          oppCount={game.opponentCount}
           solo={Boolean(game.table?.solo)}
           onAgain={() => {
             if (game.table?.solo) {

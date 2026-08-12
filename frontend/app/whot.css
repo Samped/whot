@@ -2215,6 +2215,10 @@ button.wc {
   color: #b42318;
 }
 
+.result-splash.is-tie .result-card h2 {
+  color: #5a5148;
+}
+
 .result-card p {
   margin: 0;
   max-width: 34ch;

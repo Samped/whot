@@ -26,6 +26,7 @@ const tableTuple = {
     { name: "marketLeft", type: "uint16" },
     { name: "solo", type: "bool" },
     { name: "botPending_", type: "bool" },
+    { name: "marketEnd_", type: "bool" },
   ],
 } as const;
 

@@ -67,6 +67,16 @@ export function heuristicMove(view: PickView): HouseMove {
     return s;
   })();
 
+  if (view.marketLeft === 0) {
+    legal.sort((a, b) => b.rank - a.rank);
+    const pick = legal[0]!;
+    return {
+      type: "play",
+      index: pick.index,
+      nextShape: pick.rank === 20 ? bestShape : 0,
+    };
+  }
+
   const score = (c: PickCard) => {
     if (view.myCount === 1) return 10_000;
     if (view.pendingKind) return 900;

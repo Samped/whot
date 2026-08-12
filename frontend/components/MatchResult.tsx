@@ -27,23 +27,32 @@ function reducedMotion() {
 
 export function MatchResult({
   won,
+  tie = false,
+  marketEnd = false,
+  myCount,
+  oppCount,
   solo,
   onAgain,
   onLobby,
 }: {
   won: boolean;
+  tie?: boolean;
+  marketEnd?: boolean;
+  myCount?: number;
+  oppCount?: number;
   solo: boolean;
   onAgain: () => void;
   onLobby: () => void;
 }) {
   const fired = useRef(false);
+  const celebrate = won && !tie;
 
   useEffect(() => {
     if (fired.current) return;
     fired.current = true;
-    if (reducedMotion()) return;
+    if (reducedMotion() || !celebrate) return;
 
-    const colors = won ? WIN_COLORS : LOSE_COLORS;
+    const colors = celebrate ? WIN_COLORS : LOSE_COLORS;
     const end = Date.now() + 3200;
 
     void confetti({
@@ -82,11 +91,27 @@ export function MatchResult({
     return () => {
       confetti.reset();
     };
-  }, [won]);
+  }, [celebrate]);
+
+  const kicker = tie ? "Market finished" : won ? "Check up" : "Hand empty";
+  const title = tie ? "Dead heat" : won ? "Congratulations" : "Hard luck";
+  const body = tie
+    ? `The market ran dry with ${myCount ?? "?"} vs ${oppCount ?? "?"} sealed cards each.`
+    : marketEnd
+      ? won
+        ? `Market finished. You held ${myCount ?? "?"} — fewer than the ${solo ? "computer" : "friend"}'s ${oppCount ?? "?"}`
+        : solo
+          ? `Market finished. The computer held ${oppCount ?? "?"} to your ${myCount ?? "?"}`
+          : `Market finished. They held ${oppCount ?? "?"} to your ${myCount ?? "?"}`
+      : won
+        ? "You emptied the hand. The hand is yours."
+        : solo
+          ? "The computer emptied first. Sit again when you are ready."
+          : "They emptied first. Rematch when you want it.";
 
   return (
     <div
-      className={`result-splash ${won ? "is-win" : "is-lose"}`}
+      className={`result-splash ${tie ? "is-tie" : won ? "is-win" : "is-lose"}`}
       role="dialog"
       aria-modal="true"
       aria-labelledby="result-title"
@@ -108,15 +133,9 @@ export function MatchResult({
         ))}
       </div>
       <div className="result-card">
-        <p className="result-kicker">{won ? "Check up" : "Hand empty"}</p>
-        <h2 id="result-title">{won ? "Congratulations" : "Hard luck"}</h2>
-        <p>
-          {won
-            ? "You emptied the hand. The hand is yours."
-            : solo
-              ? "The computer emptied first. Sit again when you are ready."
-              : "They emptied first. Rematch when you want it."}
-        </p>
+        <p className="result-kicker">{kicker}</p>
+        <h2 id="result-title">{title}</h2>
+        <p>{body}</p>
         <div className="result-actions">
           <button className="btn primary" type="button" onClick={onAgain}>
             Play again

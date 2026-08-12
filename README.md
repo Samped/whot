@@ -14,6 +14,8 @@ Inco is **TEE-based**. Each hand stays sealed until that card is dumped. Settlem
 
 Specials: 1 Hold on · 2 Pick two · 5 Pick three · 8 Suspension · 14 General market · 20 WHOT (call a shape)
 
+When the market runs out, both hands are counted — **fewest cards wins**. Equal counts are a tie.
+
 ## Layout
 
 ```
