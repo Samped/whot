@@ -705,17 +705,8 @@ export function useWhot(tableId: number) {
         for (let attempt = 0; attempt < 6; attempt++) {
           const body = await botRequest({ id: tableId, action: "play" }, 55_000);
           if (body.pending) {
-            if (body.card) {
-              setLastPlayed({
-                key: Date.now(),
-                who: "opp",
-                card: decodeCard(body.card),
-                call: body.call || "Computer",
-              });
-              seenTop.current = body.card;
-            }
             setStatus("Computer…");
-            await sleep(200);
+            await sleep(280);
             continue;
           }
           if (!body.ok) throw new Error(body.error || "Computer failed to move.");
@@ -763,28 +754,10 @@ export function useWhot(tableId: number) {
     void runBot(true);
   }, [seat, tableId, table, runBot]);
 
-  const showComputer = useCallback((cardId?: number, call?: string) => {
-    if (cardId) {
-      const played: LastPlay = {
-        key: Date.now(),
-        who: "opp",
-        card: decodeCard(cardId),
-        call: call || "Computer",
-      };
-      setLastCall(played.call);
-      setLastPlayed(played);
-      seenTop.current = cardId;
-      return;
-    }
-    if (call) {
-      setLastCall(call);
-      setLastPlayed({ key: Date.now(), who: "opp", card: null, call });
-    }
-  }, []);
-
   const decideComputer = useCallback(
     async (expectTop: number, expectShape: number, expectPickKind: number, expectPick: number, oppCount: number) => {
-      const body = await botRequest(
+      // Warm the house decision cache only — UI waits for the confirmed play.
+      await botRequest(
         {
           id: tableId,
           action: "decide",
@@ -796,9 +769,8 @@ export function useWhot(tableId: number) {
         },
         8_000,
       );
-      if (body.card || body.call) showComputer(body.card, body.call);
     },
-    [tableId, showComputer],
+    [tableId],
   );
 
   const playCardOnChain = useCallback(
@@ -847,14 +819,15 @@ export function useWhot(tableId: number) {
         await refetch();
         void peekHand();
         setBusy(false);
-        await decideP;
+        void decideP;
       } catch (err) {
         setMyCards((prev) => {
           const next = prev.slice();
           next.splice(index, 0, card);
           return next;
         });
-        setLastPlayed(table?.top ? { key: Date.now(), who: "me", card: decodeCard(table.top), call: "" } : null);
+        seenTop.current = table?.top || 0;
+        setLastPlayed(null);
         setError(friendlyError(err));
         setBusy(false);
       }
@@ -904,7 +877,7 @@ export function useWhot(tableId: number) {
       setStatus("");
       setBusy(false);
       void runBot(true);
-      await decideP;
+      void decideP;
     } catch (err) {
       setPendingDraw(0);
       setError(friendlyError(err));

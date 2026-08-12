@@ -70,16 +70,6 @@ export function ShapeGlyph({
   );
 }
 
-function specialLabel(rank: number) {
-  if (rank === 1) return "HOLD ON";
-  if (rank === 2) return "PICK TWO";
-  if (rank === 5) return "PICK THREE";
-  if (rank === 8) return "SUSPEND";
-  if (rank === 14) return "MARKET";
-  if (rank === 20) return "WHOT";
-  return "";
-}
-
 export function WhotFace({
   card,
   playable,
@@ -97,12 +87,11 @@ export function WhotFace({
 }) {
   const name = SHAPE_CLASS[card.shape] ?? "whot";
   const Tag = onClick ? "button" : "div";
-  const label = specialLabel(card.rank);
   const isWhot = card.rank === 20;
   return (
     <Tag
       type={onClick ? "button" : undefined}
-      className={`wc wc-${size} shape-${name} ${playable ? "playable" : ""} ${dim ? "dim" : ""} ${isWhot ? "wild" : ""} ${label ? "special" : ""}`}
+      className={`wc wc-${size} shape-${name} ${playable ? "playable" : ""} ${dim ? "dim" : ""} ${isWhot ? "wild" : ""}`}
       style={style}
       onClick={onClick}
       aria-label={`${name} ${card.rank}${specialCall(card.rank) ? ` ${specialCall(card.rank)}` : ""}`}
@@ -116,7 +105,6 @@ export function WhotFace({
         <div className="wc-emblem">
           <span className="wc-ring" />
           <ShapeGlyph shape={card.shape} className="hero" />
-          {label ? <span className="wc-ribbon">{label}</span> : null}
         </div>
         <div className="wc-corner bot">
           <b>{isWhot ? "W" : card.rank}</b>

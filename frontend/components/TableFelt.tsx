@@ -1,12 +1,12 @@
 "use client";
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { CardSlot, ShapeGlyph, WhotBack, WhotFace } from "@/components/WhotCard";
 import { isLegal, resolvePickChallenge, SHAPE_NAME, type WhotCard } from "@/lib/whot";
 import type { LastPlay } from "@/hooks/useWhot";
 
 const SHAPES = [1, 2, 3, 4, 5] as const;
-const FLY_MS = 420;
+const FLY_MS = 580;
 
 type Box = { x: number; y: number; w: number; h: number };
 type Flyer = { key: number; who: "me" | "opp"; card: WhotCard; from: Box; to: Box };
@@ -51,31 +51,34 @@ function oppFanOverlap(count: number, tight: boolean) {
   return -38;
 }
 
-function FlyCard({ flyer, onDone }: { flyer: Flyer; onDone: () => void }) {
+function FlyCard({ flyer, onDone }: { flyer: Flyer; onDone: (key: number) => void }) {
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
-    const { from, to } = flyer;
+    const { from, to, key } = flyer;
     const dx = to.x - from.x;
     const dy = to.y - from.y;
-    const sx = to.w / from.w;
-    const sy = to.h / from.h;
-    el.style.transform = "translate3d(0,0,0) scale(1)";
+    const sx = to.w / Math.max(from.w, 1);
+    const sy = to.h / Math.max(from.h, 1);
+    el.style.opacity = "1";
+    el.style.transform = "translate3d(0,0,0) scale(1) rotate(0deg)";
     el.style.transition = "none";
-    const start = requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        el.style.transition = `transform ${FLY_MS}ms cubic-bezier(0.22, 1, 0.36, 1)`;
+    let frame2 = 0;
+    const frame1 = requestAnimationFrame(() => {
+      frame2 = requestAnimationFrame(() => {
+        el.style.transition = `transform ${FLY_MS}ms cubic-bezier(0.16, 1, 0.3, 1), opacity ${Math.round(FLY_MS * 0.85)}ms ease-out`;
         el.style.transform = `translate3d(${dx}px, ${dy}px, 0) scale(${sx}, ${sy})`;
       });
     });
-    const done = window.setTimeout(onDone, FLY_MS + 20);
+    const done = window.setTimeout(() => onDone(key), FLY_MS + 40);
     return () => {
-      cancelAnimationFrame(start);
+      cancelAnimationFrame(frame1);
+      cancelAnimationFrame(frame2);
       window.clearTimeout(done);
     };
-  }, [flyer.key]);
+  }, [flyer.key]); // eslint-disable-line react-hooks/exhaustive-deps — animate once per flight key
 
   return (
     <div
@@ -135,6 +138,8 @@ export function TableFelt({
   const fanRef = useRef<HTMLDivElement>(null);
   const slotRefs = useRef<(HTMLDivElement | null)[]>([]);
   const queue = useRef<Flyer[]>([]);
+  const flyerRef = useRef<Flyer | null>(null);
+  const topRef = useRef(top);
 
   const [pickShapeFor, setPickShapeFor] = useState<number | null>(null);
   const [heldTop, setHeldTop] = useState<WhotCard | null>(top);
@@ -145,23 +150,27 @@ export function TableFelt({
   const [coarse, setCoarse] = useState(false);
   const [fanBox, setFanBox] = useState({ width: 0, cardW: 118 });
 
+  topRef.current = top;
+
   useEffect(() => {
+    // Always re-seat to the on-chain pile when nothing is flying (and when busy
+    // clears after a failed play). Never leave a preview card stuck on top.
+    if (flyerRef.current) return;
     if (!top) return;
-    // Trust the on-chain pile once it moves. Don't keep an optimistic computer
-    // preview that can disagree with the real pick-two / pick-three state.
-    if (flyer?.who === "me") return;
     setHeldTop(top);
-  }, [top?.id, flyer?.who, flyer?.key]);
+    setHideMine(null);
+  }, [top?.id, busy, flyer]);
 
   function pileBox() {
     return boxOf(pileRef.current?.querySelector(".wc") ?? pileRef.current);
   }
 
   function enqueue(next: Flyer) {
-    if (flyer) {
+    if (flyerRef.current) {
       queue.current.push(next);
       return;
     }
+    flyerRef.current = next;
     setFlyer(next);
   }
 
@@ -186,18 +195,21 @@ export function TableFelt({
     });
   }
 
-  function finishFly() {
-    if (flyer) setHeldTop(flyer.card);
+  const finishFly = useCallback((key: number) => {
+    const flew = flyerRef.current;
+    if (!flew || flew.key !== key) return;
+    const chain = topRef.current;
+    setHeldTop(chain?.id === flew.card.id ? chain : flew.card);
     setSeatTick((n) => n + 1);
     const next = queue.current.shift() ?? null;
+    flyerRef.current = next;
     setFlyer(next);
     if (!next) setHideMine(null);
-  }
+  }, []);
 
   useEffect(() => {
     if (!lastPlayed || lastPlayed.who !== "opp" || !lastPlayed.card) return;
     if (heldTop?.id === lastPlayed.card.id) return;
-    // If chain already has this card, just seat it — don't block input with a flyer.
     if (top?.id === lastPlayed.card.id) {
       setHeldTop(lastPlayed.card);
       return;
@@ -285,6 +297,11 @@ export function TableFelt({
             <em>{opponentCount} sealed</em>
           </div>
         </div>
+        {lastCall ? (
+          <span className="call-chip" role="status">
+            {lastCall}
+          </span>
+        ) : null}
         <div className="fan opp-fan" ref={oppRef}>
           {Array.from({ length: shownBacks }, (_, i) => (
             <CardSlot
@@ -317,13 +334,11 @@ export function TableFelt({
               <span className="pile-tag">Market · {marketLeft}</span>
             </div>
             <div className="pile discard open-pile" ref={pileRef}>
-              <div key={seatTick} className={seatTick ? "pile-face is-seat" : "pile-face"}>
+              <div
+                key={seatTick}
+                className={`pile-face${seatTick ? " is-seat" : ""}${flyer ? " is-catching" : ""}`}
+              >
                 {pile ? <WhotFace card={pile} size="xl" /> : <WhotBack size="xl" />}
-                {lastCall ? (
-                  <span className="call-chip" role="status">
-                    {lastCall}
-                  </span>
-                ) : null}
               </div>
               <span className="open-label">
                 {pile

@@ -917,13 +917,10 @@ a,
 }
 
 .call-chip {
-  position: absolute;
-  left: 50%;
-  top: auto;
-  bottom: calc(100% + 8px);
+  display: inline-flex;
+  align-self: flex-start;
   z-index: 6;
-  transform: translate(-50%, 0);
-  max-width: min(160px, calc(100vw - 2rem));
+  max-width: min(220px, 70vw);
   padding: 0.32rem 0.7rem;
   border-radius: 999px;
   background: linear-gradient(180deg, #fffdf8 0%, #f4efe4 100%);
@@ -934,7 +931,7 @@ a,
   font-weight: 700;
   letter-spacing: 0.04em;
   line-height: 1.2;
-  text-align: center;
+  text-align: left;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -946,11 +943,11 @@ a,
 @keyframes call-in {
   from {
     opacity: 0;
-    transform: translate(-50%, 6px);
+    transform: translateY(-6px);
   }
   to {
     opacity: 1;
-    transform: translate(-50%, 0);
+    transform: none;
   }
 }
 
@@ -1052,13 +1049,11 @@ button.wc {
 .wc-sm .glyph.hero { width: 26px; height: 26px; }
 .wc-lg .glyph.hero { width: 58px; height: 58px; }
 .wc-lg .wc-corner b { font-size: 1.05rem; }
-.wc-lg .wc-ribbon { font-size: 0.5rem; padding: 2px 6px; }
 .wc-lg .wc-emblem { inset: 24px 10px 28px; }
 .wc-xl .glyph.hero { width: 78px; height: 78px; }
 .wc-xl .wc-corner b { font-size: 1.45rem; }
 .wc-xl .wc-corner { width: 32px; }
 .wc-xl .glyph.mini { width: 16px; height: 16px; }
-.wc-xl .wc-ribbon { font-size: 0.58rem; padding: 3px 8px; }
 .wc-xl .wc-plate { inset: 5px; border-radius: 10px; }
 
 .wc-emblem {
@@ -1069,23 +1064,6 @@ button.wc {
 }
 
 .wc-ring { display: none; }
-
-.wc-ribbon {
-  position: absolute;
-  bottom: 0;
-  padding: 2px 5px;
-  background: var(--suit, #1c1408);
-  color: #f4ead4;
-  font-size: 0.44rem;
-  letter-spacing: 0.06em;
-  font-weight: 700;
-  white-space: nowrap;
-}
-
-.wc.wild .wc-ribbon {
-  background: #efe6d4;
-  color: #1c1712;
-}
 
 .wc.playable { cursor: pointer; }
 
@@ -1137,15 +1115,23 @@ button.wc {
 }
 
 .pile-face.is-seat .wc {
-  animation: pile-seat 0.34s cubic-bezier(0.22, 1, 0.36, 1);
+  animation: pile-seat 0.42s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.pile-face.is-catching .wc {
+  opacity: 0.55;
+  transform: scale(0.97);
+  transition: opacity 0.2s ease, transform 0.2s ease;
 }
 
 @keyframes pile-seat {
   from {
-    transform: translateY(-12px) scale(1.03);
+    transform: translateY(-10px) scale(1.04);
+    opacity: 0.85;
   }
   to {
     transform: none;
+    opacity: 1;
   }
 }
 
@@ -1153,8 +1139,8 @@ button.wc {
   position: fixed;
   z-index: 80;
   pointer-events: none;
-  will-change: transform;
-  filter: drop-shadow(0 18px 22px rgba(0, 0, 0, 0.38));
+  will-change: transform, opacity;
+  filter: drop-shadow(0 22px 28px rgba(0, 0, 0, 0.42));
 }
 
 .fly-card .wc {
@@ -2174,6 +2160,11 @@ button.wc {
   .seat-rail.opp {
     flex-shrink: 0;
     gap: 0.2rem;
+    justify-items: start;
+  }
+
+  .seat-chip.opp {
+    margin: 0;
   }
 
   .seat-chip strong {
@@ -2252,9 +2243,8 @@ button.wc {
   }
 
   .call-chip {
-    bottom: calc(100% + 6px);
-    max-width: min(140px, calc(100vw - 3rem));
-    padding: 0.28rem 0.5rem;
+    max-width: min(180px, 62vw);
+    padding: 0.26rem 0.55rem;
     font-size: 0.58rem;
     letter-spacing: 0.03em;
     line-height: 1.15;
@@ -2265,6 +2255,7 @@ button.wc {
     overflow: hidden;
     text-overflow: ellipsis;
     box-shadow: 0 6px 14px rgba(0, 0, 0, 0.32);
+    margin: 0.05rem 0 0.15rem;
   }
 
   .follow-chip {
@@ -2348,6 +2339,9 @@ button.wc {
     margin: 0;
     line-height: 1.25;
     padding: 0;
+    text-align: left;
+    justify-self: start;
+    align-self: start;
     display: -webkit-box;
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
@@ -2628,10 +2622,10 @@ button.wc {
   }
 
   .call-chip {
-    bottom: calc(100% + 4px);
     font-size: 0.52rem;
-    padding: 0.22rem 0.4rem;
-    max-width: min(120px, calc(100vw - 3.5rem));
+    padding: 0.2rem 0.45rem;
+    max-width: min(150px, 58vw);
+    margin: 0 0 0.1rem;
   }
 
   .open-pile .wc-xl,
