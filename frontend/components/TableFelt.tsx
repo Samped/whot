@@ -271,20 +271,19 @@ export function TableFelt({
 
       <div className="table-stage">
         <div className="table-rail" aria-hidden />
+        <div className="felt-hud">
+          <div className={`follow-chip s-${shapeName}`}>
+            <ShapeGlyph shape={calledShape || 1} />
+            <div>
+              <b>Follow {shapeName}</b>
+              {pendingKind ? <em>pay pick {pendingPick}</em> : <em>shape or number</em>}
+            </div>
+          </div>
+        </div>
         <div className={`felt ${myTurn ? "is-mine" : ""}`}>
           <div className="felt-vignette" aria-hidden />
           <div className="felt-grain" aria-hidden />
           <div className="felt-shine" aria-hidden />
-
-          <div className="felt-hud">
-            <div className={`follow-chip s-${shapeName}`}>
-              <ShapeGlyph shape={calledShape || 1} />
-              <div>
-                <b>Follow {shapeName}</b>
-                {pendingKind ? <em>pay pick {pendingPick}</em> : <em>shape or number</em>}
-              </div>
-            </div>
-          </div>
 
           <div className="felt-center">
             <div className="pile-spotlight" aria-hidden />

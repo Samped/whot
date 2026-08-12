@@ -497,6 +497,7 @@ a,
 .felt-wrap {
   display: grid;
   gap: 0.65rem;
+  overflow: visible;
 }
 
 .seat-rail {
@@ -587,6 +588,21 @@ a,
     0 22px 48px rgba(0, 0, 0, 0.42),
     inset 0 2px 0 rgba(255, 236, 210, 0.12),
     inset 0 -3px 8px rgba(0, 0, 0, 0.35);
+  overflow: visible;
+}
+
+.felt-hud {
+  position: absolute;
+  top: 0.55rem;
+  right: 0.75rem;
+  z-index: 4;
+  display: flex;
+  justify-content: flex-end;
+  pointer-events: none;
+}
+
+.felt-hud .follow-chip {
+  pointer-events: auto;
 }
 
 .table-rail {
@@ -603,10 +619,10 @@ a,
   position: relative;
   overflow: hidden;
   min-height: 300px;
-  display: grid;
-  grid-template-rows: auto 1fr;
+  display: flex;
+  justify-content: center;
   align-items: center;
-  padding: 1.1rem 1.25rem 1.35rem;
+  padding: 1.35rem 1.25rem 1.35rem;
   border-radius: 50% / 26%;
   background:
     radial-gradient(ellipse 85% 70% at 50% 42%, var(--felt-glow) 0%, transparent 58%),
@@ -651,21 +667,6 @@ a,
     transparent 68%,
     rgba(0, 0, 0, 0.12) 100%
   );
-}
-
-.felt-hud {
-  position: relative;
-  z-index: 2;
-  display: flex;
-  justify-content: flex-end;
-  align-items: flex-start;
-  min-height: 0;
-  padding: 0 0.15rem;
-  pointer-events: none;
-}
-
-.felt-hud .follow-chip {
-  pointer-events: auto;
 }
 
 .felt-center {
@@ -752,25 +753,25 @@ a,
 }
 
 .turn-line {
-  text-align: center;
+  text-align: left;
+  justify-self: start;
+  width: fit-content;
+  max-width: 100%;
   font-family: var(--font-display), sans-serif;
-  font-size: 0.95rem;
+  font-size: 1.1rem;
   font-weight: 600;
-  letter-spacing: 0.02em;
-  color: rgba(239, 230, 212, 0.72);
-  margin: 0;
-  padding: 0.5rem 0.85rem;
-  border-radius: 999px;
-  background: rgba(10, 26, 20, 0.5);
-  border: 1px solid rgba(239, 230, 212, 0.08);
-  backdrop-filter: blur(8px);
+  letter-spacing: 0.01em;
+  color: var(--paper);
+  margin: 0.2rem 0 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  backdrop-filter: none;
+  border-radius: 0;
 }
 
 .turn-line.mine {
-  color: #f8e8dc;
-  border-color: rgba(201, 169, 98, 0.35);
-  background: rgba(166, 28, 20, 0.18);
-  box-shadow: 0 0 24px rgba(166, 28, 20, 0.12);
+  color: #f3d2c8;
 }
 
 .call-chip {
@@ -1620,21 +1621,20 @@ button.wc {
     padding: 6px;
     border-radius: 50% / 22%;
     display: flex;
+    overflow: visible;
   }
 
   .felt {
     flex: 1;
     min-height: 0;
-    padding: 0.4rem 0.35rem 0.5rem;
+    padding: 0.55rem 0.35rem 0.5rem;
     border-radius: 50% / 24%;
-    grid-template-rows: auto 1fr;
   }
 
   .felt-hud {
-    position: absolute;
-    inset: 0.4rem 0.45rem auto;
-    padding: 0;
-    z-index: 3;
+    top: 0.3rem;
+    right: 0.45rem;
+    z-index: 5;
   }
 
   .felt-center {
@@ -1642,7 +1642,7 @@ button.wc {
     min-height: 0;
     gap: 0.65rem;
     align-items: center;
-    padding-top: 2.1rem;
+    padding-top: 0;
   }
 
   .pile-spotlight {
@@ -1723,10 +1723,10 @@ button.wc {
 
   .turn-line {
     flex-shrink: 0;
-    font-size: 0.82rem;
+    font-size: 0.95rem;
     margin: 0;
     line-height: 1.25;
-    padding: 0.38rem 0.65rem;
+    padding: 0;
     display: -webkit-box;
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
