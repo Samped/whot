@@ -1,8 +1,8 @@
 # WHOT
 
-Nigerian matching cards. Play the computer instantly, or host a table and send the number to a friend. Friend-match hands are encrypted on-chain with [Inco Lightning](https://docs.inco.org) until a card is played.
+African matching cards. Play the computer instantly, or host a table and send the number to a friend. Friend-match hands are encrypted on-chain with [Inco Lightning](https://docs.inco.org) until a card is played.
 
-Inco is **TEE-based, not FHE**. Each hand stays sealed until that card is dumped. Settlement attests the catalog index of the card played.
+Inco is **TEE-based**. Each hand stays sealed until that card is dumped. Settlement attests the catalog index of the card played.
 
 ## Play
 
