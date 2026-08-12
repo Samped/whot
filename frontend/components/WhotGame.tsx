@@ -154,7 +154,7 @@ function Home({ onBoard }: { onBoard: () => void }) {
 
       <section className="lobby">
         <div className="lobby-copy">
-          <p className="eyebrow">Nigerian cards · 54 in the pack</p>
+          <p className="eyebrow">WHOT cards · 54 in the pack</p>
           <h1>Sit down.</h1>
           <p className="lede">
             Hold on. Pick two. General market. Same WHOT — match the pile by
