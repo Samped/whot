@@ -93,8 +93,8 @@ export function MatchResult({
     };
   }, [celebrate]);
 
-  const kicker = tie ? "Market finished" : won ? "Check up" : "Hand empty";
-  const title = tie ? "Dead heat" : won ? "Congratulations" : "Hard luck";
+  const kicker = tie ? "Market finished" : won ? "You win" : "Hand empty";
+  const title = tie ? "Dead heat" : won ? "Congratulations" : "Better luck next time";
   const body = tie
     ? `The market ran dry. Rank sums tied at ${myCount ?? "?"}.`
     : marketEnd

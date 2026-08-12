@@ -73,7 +73,7 @@ export async function POST(req: Request) {
       .replace(/\D/g, "")
       .slice(0, 6);
     if (!flowId) return bad("Ask for a new code.");
-    if (otp.length !== 6) return bad("Enter the six digits from the letter.");
+    if (otp.length !== 6) return bad("Enter the six-digit code from your email.");
 
     const payload = { flowId, otp };
     const candidates = [

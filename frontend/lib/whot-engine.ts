@@ -170,7 +170,7 @@ export function playCard(
   applySpecials(s, seat, card);
   if (s.hands[seat].length === 0) {
     s.winner = seat;
-    s.lastCall = "Check up!";
+    s.lastCall = "Winner!";
   }
   return s;
 }

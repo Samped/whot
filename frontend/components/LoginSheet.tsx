@@ -78,7 +78,7 @@ export function LoginSheet() {
       return;
     }
     if (otp.length !== 6) {
-      setError("Enter the six digits from the letter.");
+      setError("Enter the six-digit code from your email.");
       return;
     }
     setCode(otp);

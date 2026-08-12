@@ -158,9 +158,9 @@ function Home({ onBoard }: { onBoard: () => void }) {
           <h1>Sit down.</h1>
           <p className="lede">
             Hold on. Pick two. General market. Same WHOT — match the pile by
-            shape or number, first empty hand checks up. Your cards sit
-            encrypted on-chain, dark to the room. They only decrypt when you
-            slam one onto the felt.
+            shape or number. First to empty their hand wins. Your cards sit
+            encrypted on-chain, hidden from the room. They only decrypt when you
+            play one onto the table.
           </p>
           <div className="actions">
             <button
@@ -309,7 +309,7 @@ function Home({ onBoard }: { onBoard: () => void }) {
               </span>
             </li>
           ))}
-          {board.rows.length === 0 && <li className="empty">Nobody don check up yet.</li>}
+          {board.rows.length === 0 && <li className="empty">No winners yet.</li>}
         </ol>
       </section>
     </div>
@@ -354,7 +354,7 @@ function HowSection({ compact = false }: { compact?: boolean }) {
             Fifty-four cards. Five shapes — circle, triangle, cross, square,
             star — plus five WHOT 20s. You and the other seat each get five.
             One card is turned face-up. Match the open pile by shape or by
-            number. First to empty the hand checks up.
+            number. First to empty the hand wins.
           </p>
           <p>
             Nothing follows? Go market and draw. A pending pick two or pick
@@ -640,8 +640,8 @@ function PvpScreen({ tableId }: { tableId: number }) {
                     : `Market finished — ${short(game.table?.winner_)} wins with ${oppScore} points.`
               : game.table?.solo &&
                   game.table.winner_?.toLowerCase() === game.table.p1?.toLowerCase()
-                ? "Computer check up."
-                : `Check up! ${short(game.table?.winner_)}`
+                ? "The computer wins."
+                : `${short(game.table?.winner_)} wins!`
             : countingRanks
               ? game.status || "Counting the ranks in each hand…"
               : phase === 2
@@ -670,7 +670,7 @@ function PvpScreen({ tableId }: { tableId: number }) {
                       ? game.seat < 0
                         ? "Watching this table."
                         : "Computer is on the move…"
-                      : "Friend dey think…"
+                      : "Your friend is thinking…"
         }
         busy={game.busy || game.sealedPending > 0 || countingRanks}
         peeking={game.peeking}
@@ -795,7 +795,7 @@ function BoardScreen({ onHome }: { onHome: () => void }) {
         <span />
       </div>
       <p className="lede slim">
-        Every player who checks up lands here — friend matches and computer games. Invite anyone
+        Every player who wins a match lands here — friend matches and computer games. Invite anyone
         straight to a table.
       </p>
       {board.address && (
@@ -838,7 +838,7 @@ function BoardScreen({ onHome }: { onHome: () => void }) {
             </li>
           );
         })}
-        {board.rows.length === 0 && <li className="empty">Nobody don check up yet.</li>}
+        {board.rows.length === 0 && <li className="empty">No winners yet.</li>}
       </ol>
     </div>
   );
