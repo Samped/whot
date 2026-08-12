@@ -917,11 +917,20 @@ a,
   color: #f3d2c8;
 }
 
+.opp-row {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  align-items: center;
+  min-height: 48px;
+}
+
 .call-chip {
   position: absolute;
   left: 0;
-  top: 0;
+  top: 50%;
   z-index: 6;
+  transform: translateY(-50%);
   max-width: min(200px, 42vw);
   padding: 0.32rem 0.7rem;
   border-radius: 999px;
@@ -945,11 +954,11 @@ a,
 @keyframes call-in {
   from {
     opacity: 0;
-    transform: translateY(-6px);
+    transform: translateY(calc(-50% - 6px));
   }
   to {
     opacity: 1;
-    transform: none;
+    transform: translateY(-50%);
   }
 }
 
@@ -2241,7 +2250,7 @@ button.wc {
 
   .call-chip {
     left: 0;
-    top: 0;
+    top: 50%;
     max-width: min(150px, 38vw);
     padding: 0.26rem 0.5rem;
     font-size: 0.58rem;
@@ -2611,6 +2620,11 @@ button.wc {
     display: none;
   }
 
+  .opp-row {
+    min-height: 28px;
+    justify-items: start;
+  }
+
   .seat-chip em {
     display: none;
   }
@@ -2620,6 +2634,10 @@ button.wc {
   }
 
   .call-chip {
+    position: relative;
+    top: auto;
+    left: auto;
+    transform: none;
     font-size: 0.52rem;
     padding: 0.2rem 0.42rem;
     max-width: min(130px, 36vw);

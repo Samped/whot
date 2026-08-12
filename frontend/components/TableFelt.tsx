@@ -290,11 +290,6 @@ export function TableFelt({
   return (
     <div className="felt-wrap">
       <div className="seat-rail opp">
-        {lastCall ? (
-          <span className="call-chip" role="status">
-            {lastCall}
-          </span>
-        ) : null}
         <div className="seat-chip opp">
           <span className="avatar opp" aria-hidden />
           <div className="seat-meta">
@@ -302,17 +297,24 @@ export function TableFelt({
             <em>{opponentCount} sealed</em>
           </div>
         </div>
-        <div className="fan opp-fan" ref={oppRef}>
-          {Array.from({ length: shownBacks }, (_, i) => (
-            <CardSlot
-              key={i}
-              overlap={i === 0 ? 0 : oppOverlap}
-              z={i}
-              tilt={(i - (shownBacks - 1) / 2) * (tight ? 3 : 5)}
-            >
-              <WhotBack i={i} size="sm" compact />
-            </CardSlot>
-          ))}
+        <div className="opp-row">
+          {lastCall ? (
+            <span className="call-chip" role="status">
+              {lastCall}
+            </span>
+          ) : null}
+          <div className="fan opp-fan" ref={oppRef}>
+            {Array.from({ length: shownBacks }, (_, i) => (
+              <CardSlot
+                key={i}
+                overlap={i === 0 ? 0 : oppOverlap}
+                z={i}
+                tilt={(i - (shownBacks - 1) / 2) * (tight ? 3 : 5)}
+              >
+                <WhotBack i={i} size="sm" compact />
+              </CardSlot>
+            ))}
+          </div>
         </div>
       </div>
 
