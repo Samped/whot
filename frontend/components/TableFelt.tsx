@@ -34,12 +34,21 @@ function fallbackBox(who: "me" | "opp", to: Box): Box {
   };
 }
 
-function fanSpread(width: number, cardW: number, count: number) {
+function fanSpread(width: number, cardW: number, count: number, tight = false) {
   if (count <= 1) return 0;
-  if (width <= 0 || cardW <= 0) return -40;
-  const peek = Math.min(48, Math.max(34, Math.round(cardW * 0.4)));
+  if (width <= 0 || cardW <= 0) return tight ? -30 : -40;
+  const peek = tight
+    ? Math.min(26, Math.max(16, Math.round(cardW * 0.26)))
+    : Math.min(48, Math.max(34, Math.round(cardW * 0.4)));
   const margin = (width - count * cardW) / (count - 1);
-  return Math.max(-(cardW - peek), Math.min(8, margin));
+  const maxOverlap = tight ? -(cardW - peek) : -(cardW - peek);
+  return Math.max(maxOverlap, Math.min(tight ? 4 : 8, margin));
+}
+
+function oppFanOverlap(count: number, tight: boolean) {
+  if (count <= 1) return 0;
+  if (tight) return Math.max(-16, Math.min(-10, Math.round(-280 / count)));
+  return -38;
 }
 
 function FlyCard({ flyer, onDone }: { flyer: Flyer; onDone: () => void }) {
@@ -242,11 +251,13 @@ export function TableFelt({
 
   const shownMine = myCards.length + sealedPending;
   const mid = (shownMine - 1) / 2;
-  const shownBacks = Math.min(opponentCount, 12);
-  const mineSpread = fanSpread(fanBox.width, fanBox.cardW, shownMine);
   const tight = fanBox.width > 0 ? fanBox.width < 720 : typeof window !== "undefined" && window.innerWidth < 720;
-  const tiltStep = tight ? 2.1 : 5.5;
-  const liftStep = tight ? 2 : 6;
+  const shownBacks = Math.min(opponentCount, tight ? 8 : 12);
+  const mineSpread = fanSpread(fanBox.width, fanBox.cardW, shownMine, tight);
+  const oppOverlap = oppFanOverlap(shownBacks, tight);
+  const denseHand = tight && shownMine > 7;
+  const tiltStep = tight ? (denseHand ? 1.4 : 2.1) : 5.5;
+  const liftStep = tight ? (denseHand ? 1 : 2) : 6;
   const shapeName = SHAPE_NAME[calledShape] || "any";
   const pile = heldTop ?? top;
 
@@ -262,8 +273,13 @@ export function TableFelt({
         </div>
         <div className="fan opp-fan" ref={oppRef}>
           {Array.from({ length: shownBacks }, (_, i) => (
-            <CardSlot key={i} overlap={i === 0 ? 0 : -38} z={i} tilt={(i - (shownBacks - 1) / 2) * 5}>
-              <WhotBack i={i} size="sm" />
+            <CardSlot
+              key={i}
+              overlap={i === 0 ? 0 : oppOverlap}
+              z={i}
+              tilt={(i - (shownBacks - 1) / 2) * (tight ? 3 : 5)}
+            >
+              <WhotBack i={i} size="sm" compact />
             </CardSlot>
           ))}
         </div>
@@ -297,11 +313,11 @@ export function TableFelt({
               </span>
               {lastCall ? <span className="call-chip">{lastCall}</span> : null}
             </div>
-            <div className={`follow-chip s-${shapeName}`}>
+            <div className={`follow-chip s-${shapeName}${tight ? " is-compact" : ""}`}>
               <ShapeGlyph shape={calledShape || 1} />
               <div>
-                <b>Follow {shapeName}</b>
-                {pendingKind ? <em>pick {pendingPick}</em> : <em>shape or #</em>}
+                <b>{tight ? shapeName : `Follow ${shapeName}`}</b>
+                {pendingKind ? <em>pick {pendingPick}</em> : <em>{tight ? "# or shape" : "shape or #"}</em>}
               </div>
             </div>
           </div>
@@ -320,7 +336,7 @@ export function TableFelt({
                 : "Opening your sealed hand…"}
           </p>
         )}
-        <div className="fan my-fan" ref={fanRef}>
+        <div className={`fan my-fan${denseHand ? " is-dense" : ""}${shownMine <= 4 ? " is-few" : ""}`} ref={fanRef}>
           {myCards.map((card, i) => {
             if (hideMine === i) return <span key={`gone-${i}`} className="wc-ghost" />;
             const ok =

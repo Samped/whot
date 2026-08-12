@@ -131,13 +131,18 @@ export function WhotBack({
   i = 0,
   size = "md",
   style,
+  compact = false,
 }: {
   i?: number;
   size?: Size;
   style?: CSSProperties;
+  compact?: boolean;
 }) {
   return (
-    <div className={`wc wc-${size} back`} style={{ ...style, ["--tilt" as string]: `${(i - 2) * 4}deg` }}>
+    <div
+      className={`wc wc-${size} back${compact ? " is-compact" : ""}`}
+      style={{ ...style, ["--tilt" as string]: `${(i - 2) * 4}deg` }}
+    >
       <span className="wc-sheen" />
       <div className="wc-back-plate">
         <div className="wc-back-geo" />
