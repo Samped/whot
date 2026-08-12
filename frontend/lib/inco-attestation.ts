@@ -187,20 +187,31 @@ export async function retryDecrypt(
   _address?: Hex,
 ): Promise<AttestationResult[]> {
   const zap = await getZap();
-  try {
+  const tight = { maxRetries: 10, baseDelayInMs: 220, backoffFactor: 1.2 };
+
+  const viaVoucher = async () => {
     const session = await ensureIncoSession(walletClient);
     return (await zap.attestedDecryptWithVoucher(session.ephemeral as never, session.voucher, handles, {
-      backoffConfig: REVEAL_BACKOFF,
+      backoffConfig: tight,
     })) as AttestationResult[];
+  };
+
+  try {
+    return await viaVoucher();
   } catch (err) {
-    console.warn("[inco] voucher decrypt failed, using table EOA", err);
+    console.warn("[inco] voucher decrypt failed, retrying", err);
     try {
-      return (await zap.attestedDecrypt(walletClient, handles, {
-        backoffConfig: REVEAL_BACKOFF,
-      })) as AttestationResult[];
-    } catch (inner) {
-      console.error("[inco] attestedDecrypt failed", inner, inner instanceof Error ? inner.cause : undefined);
-      throw inner;
+      clearIncoSession();
+      return await viaVoucher();
+    } catch {
+      try {
+        return (await zap.attestedDecrypt(walletClient as never, handles, {
+          backoffConfig: REVEAL_BACKOFF,
+        })) as AttestationResult[];
+      } catch (inner) {
+        console.error("[inco] attestedDecrypt failed", inner, inner instanceof Error ? inner.cause : undefined);
+        throw inner;
+      }
     }
   }
 }

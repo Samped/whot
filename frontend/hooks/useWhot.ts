@@ -124,8 +124,10 @@ export function useWhot(tableId: number) {
   const openerLock = useRef(false);
   const openerKickKey = useRef("");
   const peekLock = useRef(false);
+  const peekDirty = useRef(false);
   const peekedKey = useRef("");
   const myCardsRef = useRef<(WhotCard & { handle: Hex })[]>([]);
+  const [pendingDraw, setPendingDraw] = useState(0);
   const attCache = useRef(new Map<string, PackedAtt>());
   const fundedRef = useRef(false);
   const seenTop = useRef(0);
@@ -283,63 +285,104 @@ export function useWhot(tableId: number) {
     return receipt;
   }, []);
 
-  const peekHand = useCallback(async (force = false) => {
-    if (!address || !WHOT_ADDRESS || !publicClient || tableId <= 0) return;
-    const client = walletClient ?? (await prepare(true));
-    if (!client) return;
-    if (peekLock.current) return;
+  const peekHand = useCallback(async (force = false): Promise<boolean> => {
+    if (!address || !WHOT_ADDRESS || !publicClient || tableId <= 0) return false;
+    if (peekLock.current) {
+      peekDirty.current = true;
+      return false;
+    }
     peekLock.current = true;
     setPeeking(true);
+    let opened = false;
     try {
-      const handles = (await publicClient.readContract({
-        address: WHOT_ADDRESS,
-        abi: whotAbi,
-        functionName: "getHandHandles",
-        args: [BigInt(tableId), address],
-      })) as Hex[];
-      if (handles.length === 0) {
-        setMyCards([]);
-        peekedKey.current = "";
-        return;
+      const client = walletClient ?? (await prepare(true));
+      if (!client) return false;
+
+      for (let attempt = 0; attempt < 8 && !opened; attempt++) {
+        if (attempt > 0) await sleep(320 + attempt * 180);
+        try {
+          const handles = (await publicClient.readContract({
+            address: WHOT_ADDRESS,
+            abi: whotAbi,
+            functionName: "getHandHandles",
+            args: [BigInt(tableId), address],
+          })) as Hex[];
+          if (handles.length === 0) {
+            setMyCards([]);
+            peekedKey.current = "";
+            setPendingDraw(0);
+            setError(null);
+            opened = true;
+            break;
+          }
+          const key = handles.join(",").toLowerCase();
+          const known = new Map(myCardsRef.current.map((c) => [c.handle.toLowerCase(), c]));
+          if (!force && key === peekedKey.current && myCardsRef.current.length === handles.length) {
+            setPendingDraw(0);
+            opened = true;
+            break;
+          }
+
+          const missing = handles.filter((h) => !known.has(h.toLowerCase()));
+          if (missing.length > 0) {
+            const results = await retryDecrypt(client, missing, address);
+            results.forEach((r, i) => {
+              const raw = r.plaintext.value;
+              const idx = typeof raw === "bigint" ? Number(raw) : Number(raw);
+              const handle = missing[i]!;
+              attCache.current.set(handle.toLowerCase(), packUintAttestation(r));
+              known.set(handle.toLowerCase(), { ...decodeIndex(idx), handle });
+            });
+          }
+
+          const next = handles
+            .map((h) => known.get(h.toLowerCase()))
+            .filter(Boolean) as (WhotCard & { handle: Hex })[];
+          if (next.length !== handles.length) continue;
+          peekedKey.current = key;
+          setMyCards(next);
+          setPendingDraw(0);
+          setError(null);
+          opened = true;
+        } catch (err) {
+          if (attempt === 7) setError(friendlyError(err));
+        }
       }
-      const key = handles.join(",").toLowerCase();
-      if (!force && key === peekedKey.current) return;
-
-      const known = new Map(myCardsRef.current.map((c) => [c.handle.toLowerCase(), c]));
-      const missing = force ? handles : handles.filter((h) => !known.has(h.toLowerCase()));
-
-      if (missing.length > 0) {
-        const results = await retryDecrypt(client, missing, address);
-        results.forEach((r, i) => {
-          const raw = r.plaintext.value;
-          const idx = typeof raw === "bigint" ? Number(raw) : Number(raw);
-          const handle = missing[i]!;
-          attCache.current.set(handle.toLowerCase(), packUintAttestation(r));
-          known.set(handle.toLowerCase(), { ...decodeIndex(idx), handle });
-        });
-      }
-
-      const next = handles.map((h) => known.get(h.toLowerCase())).filter(Boolean) as (WhotCard & {
-        handle: Hex;
-      })[];
-      if (next.length !== handles.length) return;
-      peekedKey.current = key;
-      setMyCards(next);
-      setError(null);
     } catch (err) {
       setError(friendlyError(err));
     } finally {
       peekLock.current = false;
       setPeeking(false);
     }
+    if (peekDirty.current) {
+      peekDirty.current = false;
+      return peekHand(force);
+    }
+    return opened;
   }, [address, walletClient, publicClient, tableId, prepare]);
 
+  const myHandCount = seat === 0 ? (table?.hand0 ?? 0) : seat === 1 ? (table?.hand1 ?? 0) : 0;
+  const sealedPending = Math.max(0, pendingDraw, myHandCount - myCards.length);
+
   useEffect(() => {
-    if (seat >= 0 && table && table.phase_ >= 2 && walletClient) {
-      const t = setTimeout(() => void peekHand(false), 400);
-      return () => clearTimeout(t);
-    }
-  }, [seat, table?.phase_, table?.hand0, table?.hand1, table?.marketLeft, peekHand, walletClient]);
+    if (seat < 0 || !table || table.phase_ < 2 || !walletClient) return;
+    const want = seat === 0 ? table.hand0 : table.hand1;
+    if (want <= 0) return;
+    if (myCards.length >= want && peekedKey.current) return;
+    let stop = false;
+    let timer: ReturnType<typeof setTimeout>;
+    const tick = async () => {
+      if (stop) return;
+      await peekHand(true);
+      if (stop) return;
+      if (myCardsRef.current.length < want) timer = setTimeout(() => void tick(), 700);
+    };
+    timer = setTimeout(() => void tick(), 200);
+    return () => {
+      stop = true;
+      clearTimeout(timer);
+    };
+  }, [seat, table?.phase_, table?.hand0, table?.hand1, table?.marketLeft, myCards.length, peekHand, walletClient]);
 
   const findActiveSolo = useCallback(async (player: Address) => {
     const rpc = publicRpc();
@@ -710,6 +753,7 @@ export function useWhot(tableId: number) {
   const playCardOnChain = useCallback(
     async (index: number, nextShape: number) => {
       if (!WHOT_ADDRESS || !myCards[index] || tableId <= 0) return;
+      if (pendingDraw > 0 || myCards.length < myHandCount) return;
       const card = myCards[index]!;
       const kept = myCards.filter((_, i) => i !== index);
       setMyCards(kept);
@@ -779,31 +823,44 @@ export function useWhot(tableId: number) {
       table?.solo,
       table?.top,
       decideComputer,
+      pendingDraw,
+      myHandCount,
     ],
   );
 
   const goMarket = useCallback(async () => {
     if (!WHOT_ADDRESS || tableId <= 0) return;
+    const draw = Math.max(1, table?.pick || 1);
+    const before = myCardsRef.current.length;
     setBusy(true);
     setError(null);
+    setPendingDraw(draw);
+    setStatus(draw > 1 ? `Taking ${draw} from the market…` : "Going market…");
     try {
-      setStatus("");
       const decideP = table?.solo
-        ? decideComputer(table.top, table.shape, 0, 0, myCards.length + (table.pick || 1)).catch(() => undefined)
+        ? decideComputer(table.top, table.shape, 0, 0, before + draw).catch(() => undefined)
         : null;
       const hash = await writeWhot("goMarket", [id]);
       await waitTx(hash);
-      void runBot(true);
-      setLastCall("Market");
+      setLastCall(draw > 1 ? `Picked ${draw}` : "Market");
       await refetch();
-      void peekHand();
+      await peekHand(true);
+      for (let i = 0; i < 8 && myCardsRef.current.length < before + draw; i++) {
+        await sleep(400);
+        await peekHand(true);
+      }
+      setPendingDraw((n) => (myCardsRef.current.length >= before + draw ? 0 : n));
+      setStatus("");
       setBusy(false);
+      void runBot(true);
       await decideP;
     } catch (err) {
+      setPendingDraw(0);
       setError(friendlyError(err));
       setBusy(false);
+      setStatus("");
     }
-  }, [writeWhot, waitTx, refetch, peekHand, tableId, id, runBot, table?.solo, table?.top, table?.shape, table?.pick, myCards.length, decideComputer]);
+  }, [writeWhot, waitTx, refetch, peekHand, tableId, id, runBot, table?.solo, table?.top, table?.shape, table?.pick, decideComputer]);
 
   return {
     address,
@@ -815,6 +872,7 @@ export function useWhot(tableId: number) {
     myTurn,
     myCards,
     peeking,
+    sealedPending,
     status,
     busy: busy || funding,
     error,

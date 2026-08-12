@@ -994,6 +994,38 @@ button.wc {
   margin: 0;
 }
 
+.login-sheet .login-lede {
+  margin: 0;
+  font-size: 0.95rem;
+  line-height: 1.45;
+  color: #3d352c;
+}
+
+.login-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.35rem;
+  margin-top: 0.15rem;
+}
+
+.login-tabs button {
+  min-height: 44px;
+  border: 1px solid var(--ink);
+  background: #fffdf6;
+  color: var(--ink);
+  font-family: var(--font-display), sans-serif;
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.login-tabs button.on {
+  background: var(--ink);
+  color: var(--paper);
+}
+
 .shape-grid {
   display: grid;
   grid-template-columns: repeat(5, 1fr);

@@ -27,7 +27,7 @@ import {
 } from "@/lib/game-account";
 import { clearIncoSession } from "@/lib/inco-attestation";
 
-export type PlayMode = "wallet" | "agent" | null;
+export type PlayMode = "wallet" | "email" | null;
 
 export type PlaySession = {
   address: Address;
@@ -48,7 +48,6 @@ type GameAccountValue = {
   loginOpen: boolean;
   requestLogin: () => void;
   closeLogin: () => void;
-  create: () => TableAccount;
   signInWithEmail: (email: string, ownerAddress?: string) => TableAccount;
   signOut: () => void;
   ensureReady: (minBalance?: bigint) => Promise<PlaySession>;
@@ -57,6 +56,7 @@ type GameAccountValue = {
 };
 
 const GameAccountContext = createContext<GameAccountValue | null>(null);
+const EMAIL_ACTIVE = "whot.emailActive.v1";
 
 async function requestFaucet(address: Address) {
   const res = await fetch("/api/faucet", {
@@ -66,6 +66,22 @@ async function requestFaucet(address: Address) {
   });
   const body = (await res.json().catch(() => ({}))) as { error?: string };
   if (!res.ok) throw new Error(body.error || "Could not fund table account.");
+}
+
+function markEmailActive() {
+  if (typeof window !== "undefined") {
+    window.sessionStorage.setItem(EMAIL_ACTIVE, "1");
+  }
+}
+
+function clearEmailActive() {
+  if (typeof window !== "undefined") {
+    window.sessionStorage.removeItem(EMAIL_ACTIVE);
+  }
+}
+
+function emailSessionLive() {
+  return typeof window !== "undefined" && window.sessionStorage.getItem(EMAIL_ACTIVE) === "1";
 }
 
 export function GameAccountProvider({ children }: { children: ReactNode }) {
@@ -79,68 +95,48 @@ export function GameAccountProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (walletOn && walletAddress) {
-      const pending =
-        typeof window !== "undefined" ? window.sessionStorage.getItem("whot.pendingEmail") : null;
-      const rec = loadTableAccount(walletAddress) ?? createTableAccount(walletAddress, pending || undefined);
-      if (pending) {
-        rec.email = pending;
-        saveTableAccount(rec);
-        saveMailSession(walletAddress, pending);
-        window.sessionStorage.removeItem("whot.pendingEmail");
-      }
-      setAgent((prev) => {
-        if (prev?.address.toLowerCase() === rec.address.toLowerCase()) {
-          if (pending && prev.email !== pending) return { ...prev, email: pending };
-          return prev;
-        }
-        clearIncoSession();
-        return rec;
-      });
+      clearEmailActive();
+      const rec = loadTableAccount(walletAddress);
+      setAgent(rec);
       setLoginOpen(false);
-    } else {
+      setReady(true);
+      return;
+    }
+
+    if (emailSessionLive()) {
       const mail = readMailSession();
       if (mail?.email) {
         const rec = loadTableAccount(mail.owner);
         if (rec) {
           rec.email = rec.email || mail.email;
           setAgent(rec);
-        } else {
-          setAgent(null);
+          setReady(true);
+          return;
         }
-      } else {
-        setAgent(null);
+        clearMailSession();
       }
     }
+
+    clearEmailActive();
+    setAgent(null);
     setReady(true);
   }, [walletOn, walletAddress]);
 
-  const signedIn = Boolean((walletOn && walletAddress) || agent?.email);
-  const mode: PlayMode = walletOn && walletAddress ? "wallet" : agent?.email ? "agent" : null;
+  const signedIn = Boolean((walletOn && walletAddress) || (agent?.email && emailSessionLive()));
+  const mode: PlayMode = walletOn && walletAddress ? "wallet" : agent?.email && emailSessionLive() ? "email" : null;
 
   const requestLogin = useCallback(() => setLoginOpen(true), []);
   const closeLogin = useCallback(() => setLoginOpen(false), []);
 
-  const create = useCallback(() => {
-    if (!walletAddress) {
-      throw new Error("Sign in with email or a wallet first.");
-    }
-    const next = createTableAccount(walletAddress);
-    clearIncoSession();
-    setAgent(next);
-    return next;
-  }, [walletAddress]);
-
   const signInWithEmail = useCallback((email: string, ownerAddress?: string) => {
     const trimmed = email.trim().toLowerCase();
-    if (typeof window !== "undefined") {
-      window.sessionStorage.setItem("whot.pendingEmail", trimmed);
-    }
     const owner = ownerAddress || mailOwnerKey(trimmed);
     const existing = loadTableAccount(owner);
     const next = existing ?? createTableAccount(owner, trimmed);
     next.email = trimmed;
     saveTableAccount(next);
     saveMailSession(owner, trimmed);
+    markEmailActive();
     clearIncoSession();
     setAgent(next);
     setLoginOpen(false);
@@ -149,9 +145,6 @@ export function GameAccountProvider({ children }: { children: ReactNode }) {
 
   const signOut = useCallback(() => {
     if (walletOn) disconnect();
-    void import("@coinbase/cdp-core")
-      .then(({ signOut: cdpSignOut }) => cdpSignOut())
-      .catch(() => undefined);
     if (typeof window !== "undefined") {
       window.sessionStorage.removeItem("whot.pendingEmail");
     }
@@ -159,6 +152,7 @@ export function GameAccountProvider({ children }: { children: ReactNode }) {
     clearTableAccount(walletAddress);
     if (mail) clearTableAccount(mail.owner);
     clearMailSession();
+    clearEmailActive();
     clearIncoSession();
     setAgent(null);
     setLoginOpen(false);
@@ -167,16 +161,37 @@ export function GameAccountProvider({ children }: { children: ReactNode }) {
   const ensureReady = useCallback(
     async (minBalance = 4_000_000_000_000_000n): Promise<PlaySession> => {
       const walletSigned = Boolean(walletOn && walletAddress);
-      const mailSigned = Boolean(agent?.email);
+      const mailSigned = Boolean(agent?.email && emailSessionLive());
       if (!walletSigned && !mailSigned) {
         setLoginOpen(true);
         throw new Error("Sign in with email or a wallet first.");
       }
-      const rec = agent;
+
+      let rec = agent;
+      if (!rec) {
+        if (walletSigned && walletAddress) {
+          rec = loadTableAccount(walletAddress) ?? createTableAccount(walletAddress);
+          saveTableAccount(rec);
+          setAgent(rec);
+        } else if (mailSigned) {
+          const mail = readMailSession();
+          if (!mail?.email) {
+            setLoginOpen(true);
+            throw new Error("Sign in with email or a wallet first.");
+          }
+          const owner = mail.owner;
+          rec = loadTableAccount(owner) ?? createTableAccount(owner, mail.email);
+          rec.email = mail.email;
+          saveTableAccount(rec);
+          setAgent(rec);
+        }
+      }
+
       if (!rec) {
         setLoginOpen(true);
         throw new Error("Sign in with email or a wallet first.");
       }
+
       const bal = await accountBalance(rec.address);
       if (bal < minBalance) {
         setFunding(true);
@@ -195,21 +210,22 @@ export function GameAccountProvider({ children }: { children: ReactNode }) {
           setFunding(false);
         }
       }
+
       return {
         address: rec.address,
         wallet: walletFor(rec),
-        mode: walletOn && walletAddress ? "wallet" : "agent",
+        mode: walletOn && walletAddress ? "wallet" : "email",
       };
     },
     [agent, walletOn, walletAddress],
   );
 
-  const address = agent?.address;
-  const wallet = useMemo(() => (agent ? walletFor(agent) : null), [agent]);
+  const address = signedIn ? agent?.address : undefined;
+  const wallet = useMemo(() => (agent && signedIn ? walletFor(agent) : null), [agent, signedIn]);
 
   const value = useMemo<GameAccountValue>(
     () => ({
-      account: agent,
+      account: signedIn ? agent : null,
       address,
       walletAddress,
       isConnected: Boolean(address),
@@ -220,7 +236,6 @@ export function GameAccountProvider({ children }: { children: ReactNode }) {
       loginOpen,
       requestLogin,
       closeLogin,
-      create,
       signInWithEmail,
       signOut,
       ensureReady,
@@ -237,7 +252,6 @@ export function GameAccountProvider({ children }: { children: ReactNode }) {
       loginOpen,
       requestLogin,
       closeLogin,
-      create,
       signInWithEmail,
       signOut,
       ensureReady,

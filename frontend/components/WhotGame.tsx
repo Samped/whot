@@ -506,20 +506,25 @@ function PvpScreen({ tableId }: { tableId: number }) {
               : `Check up! ${short(game.table?.winner_)}`
             : phase === 2
               ? game.status || "Locking the opener…"
-              : game.status
-                ? game.status
-                : game.myTurn
-                  ? legalHint
-                    ? "Your turn — dump a card."
-                    : "Nothing follows. Go market."
-                  : game.table?.solo
-                    ? game.seat < 0
-                      ? "Watching this table."
-                      : "Computer is on the move…"
-                    : "Friend dey think…"
+              : game.sealedPending > 0
+                ? game.sealedPending > 1
+                  ? `Those ${game.sealedPending} are landing in your hand…`
+                  : "That card is landing in your hand…"
+                : game.status
+                  ? game.status
+                  : game.myTurn
+                    ? legalHint
+                      ? "Your turn — dump a card."
+                      : "Nothing follows. Go market."
+                    : game.table?.solo
+                      ? game.seat < 0
+                        ? "Watching this table."
+                        : "Computer is on the move…"
+                      : "Friend dey think…"
         }
-        busy={game.busy}
+        busy={game.busy || game.sealedPending > 0}
         peeking={game.peeking}
+        sealedPending={game.sealedPending}
         onPlay={game.playCard}
         onMarket={game.goMarket}
         footer={

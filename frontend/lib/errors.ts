@@ -52,8 +52,8 @@ export function friendlyError(err: unknown): string {
     return "A move is already in flight. Wait a few seconds, then tap again.";
   }
 
-  if (/failed to decrypt|attesteddecrypt|not (yet )?ready|unknown handle/i.test(raw)) {
-    return "Sealed hand is not ready yet — wait a moment, then tap peek.";
+  if (/failed to decrypt|attesteddecrypt|not (yet )?ready|unknown handle|open sealed|sealed hand|couldn.?t open/i.test(raw)) {
+    return "Those cards are still sealed. Hold on — opening them now.";
   }
 
   if (/out of gas|ran out of gas/i.test(raw)) {

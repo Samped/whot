@@ -96,6 +96,7 @@ export function TableFelt({
   banner,
   busy,
   peeking,
+  sealedPending = 0,
   onPlay,
   onMarket,
   footer,
@@ -115,6 +116,7 @@ export function TableFelt({
   banner: string;
   busy?: boolean;
   peeking?: boolean;
+  sealedPending?: number;
   onPlay: (index: number, nextShape: number) => void;
   onMarket: () => void;
   footer?: ReactNode;
@@ -224,7 +226,7 @@ export function TableFelt({
 
   function clickCard(index: number) {
     const card = myCards[index];
-    if (!card || !myTurn || !live || busy || hideMine !== null || flyer) return;
+    if (!card || !myTurn || !live || busy || sealedPending > 0 || hideMine !== null || flyer) return;
     if (!isLegal(card, heldTop ?? top, calledShape, pendingKind)) return;
     const stacked = fanSpread(fanBox.width, fanBox.cardW, myCards.length) < -28;
     if (coarse && stacked && lifted !== index) {
@@ -238,9 +240,10 @@ export function TableFelt({
     runMine(index, 0, card);
   }
 
-  const mid = (myCards.length - 1) / 2;
+  const shownMine = myCards.length + sealedPending;
+  const mid = (shownMine - 1) / 2;
   const shownBacks = Math.min(opponentCount, 12);
-  const mineSpread = fanSpread(fanBox.width, fanBox.cardW, myCards.length);
+  const mineSpread = fanSpread(fanBox.width, fanBox.cardW, shownMine);
   const tight = fanBox.width > 0 ? fanBox.width < 720 : typeof window !== "undefined" && window.innerWidth < 720;
   const tiltStep = tight ? 2.1 : 5.5;
   const liftStep = tight ? 2 : 6;
@@ -303,12 +306,26 @@ export function TableFelt({
       <p className={`turn-line ${myTurn ? "mine" : ""}`}>{banner}</p>
 
       <div className="seat-rail me">
-        {peeking && <p className="hint center">Opening your sealed hand…</p>}
+        {(peeking || sealedPending > 0) && (
+          <p className="hint center">
+            {sealedPending > 1
+              ? `Opening the ${sealedPending} you just picked…`
+              : sealedPending === 1
+                ? "Opening the card you just picked…"
+                : "Opening your sealed hand…"}
+          </p>
+        )}
         <div className="fan my-fan" ref={fanRef}>
           {myCards.map((card, i) => {
             if (hideMine === i) return <span key={`gone-${i}`} className="wc-ghost" />;
             const ok =
-              myTurn && live && !busy && hideMine === null && !flyer && isLegal(card, heldTop ?? top, calledShape, pendingKind);
+              myTurn &&
+              live &&
+              !busy &&
+              sealedPending === 0 &&
+              hideMine === null &&
+              !flyer &&
+              isLegal(card, heldTop ?? top, calledShape, pendingKind);
             return (
               <CardSlot
                 key={`${card.id}-${i}`}
@@ -325,11 +342,22 @@ export function TableFelt({
               </CardSlot>
             );
           })}
+          {Array.from({ length: sealedPending }, (_, i) => (
+            <CardSlot
+              key={`sealed-${i}`}
+              overlap={myCards.length === 0 && i === 0 ? 0 : mineSpread}
+              z={myCards.length + i}
+              tilt={(myCards.length + i - mid) * tiltStep}
+              lift={Math.abs(myCards.length + i - mid) * liftStep}
+            >
+              <WhotBack i={i} size="lg" />
+            </CardSlot>
+          ))}
         </div>
         <div className="hand-bar">
           <button
             className="btn market"
-            disabled={!myTurn || busy || !live || hideMine !== null || Boolean(flyer)}
+            disabled={!myTurn || busy || sealedPending > 0 || !live || hideMine !== null || Boolean(flyer)}
             onClick={onMarket}
           >
             {pendingPick ? `Pay pick ${pendingPick}` : "Go market"}

@@ -16,11 +16,8 @@ import {
   metaMaskWallet,
   walletConnectWallet,
 } from "@rainbow-me/rainbowkit/wallets";
-import { CDPHooksProvider } from "@coinbase/cdp-hooks";
-import { createCDPEmbeddedWalletConnector } from "@coinbase/cdp-wagmi";
 import { ThemeProvider, useTheme } from "next-themes";
 import { activeChain } from "@/lib/network";
-import { CDP_PROJECT_ID, cdpConfig } from "@/lib/cdp";
 import { GameAccountProvider } from "@/hooks/useGameAccount";
 
 const queryClient = new QueryClient();
@@ -45,21 +42,9 @@ const walletConnectors = wcProjectId
     )
   : [baseAccount({ appName: "WHOT" }), injected({ shimDisconnect: true })];
 
-const cdpConnector = CDP_PROJECT_ID
-  ? createCDPEmbeddedWalletConnector({
-      cdpConfig,
-      providerConfig: {
-        chains: [activeChain],
-        transports: {
-          [activeChain.id]: transport,
-        },
-      },
-    })
-  : null;
-
 const config = createConfig({
   chains: [activeChain],
-  connectors: cdpConnector ? [cdpConnector, ...walletConnectors] : walletConnectors,
+  connectors: walletConnectors,
   transports: {
     [activeChain.id]: transport,
   },
@@ -81,27 +66,22 @@ const RainbowKitWithTheme = ({ children }: { children: ReactNode }) => {
       : darkTheme({ accentColor: "#efe6d4", accentColorForeground: "#1c1712", borderRadius: "none" });
 
   return (
-    <RainbowKitProvider theme={rainbowTheme}>{children}</RainbowKitProvider>
+    <RainbowKitProvider theme={rainbowTheme} modalSize="compact">
+      {children}
+    </RainbowKitProvider>
   );
 };
 
-function AppTree({ children }: { children: ReactNode }) {
-  return (
-    <WagmiProvider config={config}>
-      <QueryClientProvider client={queryClient}>
-        <RainbowKitWithTheme>
-          <GameAccountProvider>{children}</GameAccountProvider>
-        </RainbowKitWithTheme>
-      </QueryClientProvider>
-    </WagmiProvider>
-  );
-}
-
 const Providers = ({ children }: { children: ReactNode }) => {
-  const tree = <AppTree>{children}</AppTree>;
   return (
     <ThemeProvider attribute="class" defaultTheme="dark" forcedTheme="dark">
-      {CDP_PROJECT_ID ? <CDPHooksProvider config={cdpConfig}>{tree}</CDPHooksProvider> : tree}
+      <WagmiProvider config={config}>
+        <QueryClientProvider client={queryClient}>
+          <RainbowKitWithTheme>
+            <GameAccountProvider>{children}</GameAccountProvider>
+          </RainbowKitWithTheme>
+        </QueryClientProvider>
+      </WagmiProvider>
     </ThemeProvider>
   );
 };

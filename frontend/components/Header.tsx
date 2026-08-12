@@ -3,9 +3,8 @@
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense } from "react";
-import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { useGameAccount } from "@/hooks/useGameAccount";
-import { EmailSignIn } from "@/components/EmailSignIn";
+import { LoginSheet } from "@/components/LoginSheet";
 import { WhotBack } from "@/components/WhotCard";
 
 function Nav() {
@@ -29,60 +28,29 @@ function Nav() {
 }
 
 function AccountChip() {
-  const { address, account, mode, signOut, funding } = useGameAccount();
+  const { account, mode, walletAddress, signOut, funding, signedIn } = useGameAccount();
   const label = funding
     ? "Funding…"
-    : account?.email
+    : mode === "email" && account?.email
       ? account.email
-      : address
-        ? `Session ${address.slice(0, 6)}…${address.slice(-4)}`
+      : mode === "wallet" && walletAddress
+        ? `${walletAddress.slice(0, 6)}…${walletAddress.slice(-4)}`
         : "";
 
   return (
     <div className="account-bar">
-      {address && (
-        <span className="ghost-btn session-chip" title={address}>
+      {signedIn && label && (
+        <span className="ghost-btn session-chip" title={label}>
           {label}
         </span>
       )}
-      {(mode === "agent" || mode === "wallet") && (
-        <button className="ghost-btn" onClick={signOut}>
+      {signedIn ? (
+        <button className="ghost-btn" type="button" onClick={signOut}>
           Sign out
         </button>
+      ) : (
+        <LoginSheet />
       )}
-      {mode !== "wallet" && <EmailSignIn />}
-      <ConnectButton.Custom>
-        {({ account, chain, openAccountModal, openChainModal, openConnectModal, mounted }) => {
-          const ready = mounted;
-          const connected = ready && account && chain;
-          if (!ready) return null;
-          if (!connected) {
-            return (
-              <button onClick={openConnectModal} className="ghost-btn">
-                <span className="label-full">Connect wallet</span>
-                <span className="label-short">Wallet</span>
-              </button>
-            );
-          }
-          if (chain.unsupported) {
-            return (
-              <button onClick={openChainModal} className="wallet-btn">
-                Wrong network
-              </button>
-            );
-          }
-          return (
-            <div className="account-bar">
-              <button onClick={openChainModal} className="ghost-btn">
-                {chain.name}
-              </button>
-              <button onClick={openAccountModal} className="wallet-btn">
-                {account.displayName}
-              </button>
-            </div>
-          );
-        }}
-      </ConnectButton.Custom>
     </div>
   );
 }
