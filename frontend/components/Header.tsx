@@ -38,8 +38,10 @@ function AccountChip() {
     <div className="account-bar">
       {signedIn && !funding && mode === "email" && account?.email && address && (
         <span className="ghost-btn session-chip" title={`${account.email} · ${address}`}>
-          <span className="session-email">{account.email}</span>
-          <span className="session-addr">{shortAddr(address)}</span>
+          <span className="session-id">
+            <span className="session-email">{account.email}</span>
+            <span className="session-addr">{shortAddr(address)}</span>
+          </span>
         </span>
       )}
       {signedIn && !funding && mode === "wallet" && walletAddress && (
@@ -51,8 +53,9 @@ function AccountChip() {
         <span className="ghost-btn session-chip">Funding…</span>
       )}
       {signedIn ? (
-        <button className="ghost-btn" type="button" onClick={signOut}>
-          Sign out
+        <button className="ghost-btn sign-out-btn" type="button" onClick={signOut}>
+          <span className="sign-out-full">Sign out</span>
+          <span className="sign-out-short">Out</span>
         </button>
       ) : (
         <LoginSheet />
