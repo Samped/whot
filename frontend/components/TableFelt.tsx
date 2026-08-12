@@ -313,11 +313,19 @@ export function TableFelt({
               </span>
               {lastCall ? <span className="call-chip">{lastCall}</span> : null}
             </div>
-            <div className={`follow-chip s-${shapeName}${tight ? " is-compact" : ""}`}>
+            <div
+              className={`follow-chip s-${shapeName}${tight ? " is-compact" : ""}`}
+              aria-label={
+                pendingKind
+                  ? `Follow ${shapeName}, pick ${pendingPick}`
+                  : `Follow ${shapeName}, shape or number`
+              }
+            >
               <ShapeGlyph shape={calledShape || 1} />
-              <div>
+              <div className="follow-copy">
                 <b>{tight ? shapeName : `Follow ${shapeName}`}</b>
-                {pendingKind ? <em>pick {pendingPick}</em> : <em>{tight ? "# or shape" : "shape or #"}</em>}
+                {!tight && (pendingKind ? <em>pick {pendingPick}</em> : <em>shape or #</em>)}
+                {tight && pendingKind ? <em className="pick-hint">+{pendingPick}</em> : null}
               </div>
             </div>
           </div>
