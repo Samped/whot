@@ -16,6 +16,7 @@ import { useGameAccount } from "@/hooks/useGameAccount";
 import { useSocialApi } from "@/hooks/SocialProvider";
 import { isOpen } from "@/lib/table-view";
 import { ProfileDash } from "@/components/ProfileDash";
+import { TableMusicButton } from "@/components/TableMusicButton";
 import { displayName, type PlayerProfile } from "@/lib/social";
 import type { Address } from "viem";
 
@@ -631,9 +632,12 @@ function PvpScreen({ tableId }: { tableId: number }) {
         <button className="btn ghost" onClick={() => router.push("/")}>
           ← lobby
         </button>
-        <button className="table-pill" onClick={() => copy(link)}>
-          Table {tableCode(tableId)}
-        </button>
+        <div className="play-top-actions">
+          <TableMusicButton />
+          <button className="table-pill" onClick={() => copy(link)}>
+            Table {tableCode(tableId)}
+          </button>
+        </div>
       </div>
       <TableFelt
         opponentName={game.table?.solo ? "Computer" : "Friend"}
