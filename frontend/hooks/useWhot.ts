@@ -529,19 +529,19 @@ export function useWhot(tableId: number) {
     return () => clearTimeout(t);
   }, [table?.marketEnd_, table?.phase_, tableId, settleMarket]);
 
-  const openSolo = useCallback(async () => {
+  const openSolo = useCallback(async (forceNew = false) => {
     if (!WHOT_ADDRESS) return 0;
     if (!gameAccount.signedIn) {
       gameAccount.requestLogin();
       setError("Sign in with email or a wallet before you sit.");
       return 0;
     }
-    if (busy) return 0;
+    if (busy && !forceNew) return 0;
     setBusy(true);
     setError(null);
     setStatus("Setting the table…");
     try {
-      if (address) {
+      if (address && !forceNew) {
         setStatus("Looking for your open table…");
         const existing = await withTimeout(findActiveSolo(address), 8_000, "table lookup timed out").catch(() => 0);
         if (existing > 0) {

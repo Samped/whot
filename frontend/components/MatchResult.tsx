@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import confetti from "canvas-confetti";
 
 const WIN_COLORS = ["#c4a15a", "#e8d5a3", "#b42318", "#2f6b4f", "#f4efe4", "#1c1408"];
@@ -41,11 +41,28 @@ export function MatchResult({
   myCount?: number;
   oppCount?: number;
   solo: boolean;
-  onAgain: () => void;
+  onAgain: () => void | Promise<void>;
   onLobby: () => void;
 }) {
   const fired = useRef(false);
+  const [loading, setLoading] = useState<"again" | "lobby" | null>(null);
   const celebrate = won && !tie;
+
+  async function handleAgain() {
+    if (loading) return;
+    setLoading("again");
+    try {
+      await onAgain();
+    } finally {
+      setLoading(null);
+    }
+  }
+
+  function handleLobby() {
+    if (loading) return;
+    setLoading("lobby");
+    onLobby();
+  }
 
   useEffect(() => {
     if (fired.current) return;
@@ -137,11 +154,21 @@ export function MatchResult({
         <h2 id="result-title">{title}</h2>
         <p>{body}</p>
         <div className="result-actions">
-          <button className="btn primary" type="button" onClick={onAgain}>
-            Play again
+          <button
+            className="btn primary"
+            type="button"
+            disabled={loading !== null}
+            onClick={() => void handleAgain()}
+          >
+            {loading === "again" ? "Dealing…" : "Play again"}
           </button>
-          <button className="btn ghost" type="button" onClick={onLobby}>
-            Lobby
+          <button
+            className="btn ghost result-lobby"
+            type="button"
+            disabled={loading !== null}
+            onClick={handleLobby}
+          >
+            {loading === "lobby" ? "Leaving…" : "Lobby"}
           </button>
         </div>
       </div>

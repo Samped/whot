@@ -2606,7 +2606,8 @@ button.wc {
   }
 
   .result-card h2 {
-    font-size: clamp(2.4rem, 14vw, 3.6rem);
+    font-size: clamp(1.55rem, 7.5vw, 2.35rem);
+    line-height: 1.12;
   }
 
   .result-actions {
@@ -2849,9 +2850,12 @@ button.wc {
   margin: 0;
   font-family: var(--font-display), sans-serif;
   font-weight: 800;
-  letter-spacing: -0.045em;
-  line-height: 0.88;
-  font-size: clamp(3.2rem, 12vw, 5.4rem);
+  letter-spacing: -0.03em;
+  line-height: 1.08;
+  font-size: clamp(1.75rem, 6.8vw, 2.85rem);
+  text-wrap: balance;
+  overflow-wrap: anywhere;
+  max-width: 100%;
 }
 
 .result-splash.is-lose .result-card h2 {
@@ -2868,7 +2872,7 @@ button.wc {
 
 .result-card p {
   margin: 0;
-  max-width: 34ch;
+  max-width: 100%;
   font-size: 1.05rem;
   line-height: 1.55;
   color: #3d352c;
@@ -2879,9 +2883,31 @@ button.wc {
   flex-wrap: wrap;
   gap: 0.6rem;
   margin-top: 0.4rem;
+  position: relative;
+  z-index: 2;
 }
 
 .result-actions .btn {
   min-height: 44px;
+}
+
+.result-card .btn.primary {
+  background: var(--blood);
+  color: var(--paper);
+  border-color: var(--blood);
+}
+
+.result-card .btn.ghost,
+.result-card .btn.result-lobby {
+  color: #1c1408;
+  border-color: rgba(28, 20, 8, 0.42);
+  background: rgba(255, 255, 255, 0.35);
+}
+
+.result-card .btn.ghost:hover:not(:disabled),
+.result-card .btn.result-lobby:hover:not(:disabled) {
+  background: rgba(28, 20, 8, 0.08);
+  border-color: rgba(28, 20, 8, 0.55);
+  color: #1c1408;
 }
 

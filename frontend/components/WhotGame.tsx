@@ -746,15 +746,15 @@ function PvpScreen({ tableId }: { tableId: number }) {
           myCount={game.table?.marketEnd_ ? myScore : myHandCount}
           oppCount={game.table?.marketEnd_ ? oppScore : game.opponentCount}
           solo={Boolean(game.table?.solo)}
-          onAgain={() => {
+          onAgain={async () => {
             if (game.table?.solo) {
-              void (async () => {
-                const id = await game.openSolo();
-                if (id > 0) {
-                  if (address) rememberTable(address, { id, solo: true, seat: 0 });
-                  router.replace(tableHref(id));
-                }
-              })();
+              const id = await game.openSolo(true);
+              if (id > 0) {
+                if (address) rememberTable(address, { id, solo: true, seat: 0 });
+                router.replace(tableHref(id));
+                return;
+              }
+              toast.error("Could not deal a new table. Try again.");
               return;
             }
             router.push("/");
