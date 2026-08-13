@@ -428,8 +428,8 @@ export function TableFelt({
             disabled={!myTurn || inputLocked || !live}
             onClick={onMarket}
           >
-            {challenge.pick
-              ? `Pay pick ${challenge.pick}`
+            {myTurn && challenge.pick
+              ? `Go market · pick ${challenge.pick}`
               : marketLeft === 0
                 ? "Count ranks"
                 : "Go market"}

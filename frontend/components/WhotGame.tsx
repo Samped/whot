@@ -678,13 +678,13 @@ function PvpScreen({ tableId }: { tableId: number }) {
                     ? legalHint
                       ? pickChallenge.kind
                         ? pickChallenge.kind === 2
-                          ? "Dump a 2 to stack, or pay the pick."
-                          : "Dump a 5 to stack, or pay the pick."
+                          ? "Dump a 2 to stack, or go market."
+                          : "Dump a 5 to stack, or go market."
                         : "Your turn — dump a card."
                       : pickChallenge.kind
                         ? pickChallenge.kind === 2
-                          ? "No 2 to stack — pay pick two."
-                          : "No 5 to stack — pay pick three."
+                          ? "No 2 to stack. Go market."
+                          : "No 5 to stack. Go market."
                         : game.table?.marketLeft === 0
                           ? "Market is dry — go market to count ranks."
                           : "Nothing follows. Go market."

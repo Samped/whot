@@ -58,7 +58,7 @@ export function specialCall(rank: number): string {
   return "";
 }
 
-/** Resolve pick-two / pick-three even if UI state is briefly ahead of or behind the chain. */
+/** Resolve pick-two / pick-three even if UI state is briefly behind the chain. */
 export function resolvePickChallenge(input: {
   pendingKind?: number;
   pendingPick?: number;
@@ -66,26 +66,33 @@ export function resolvePickChallenge(input: {
   lastCall?: string;
   lastPlayed?: { who?: string; card?: WhotCard | null; call?: string } | null;
 }): { kind: number; pick: number } {
-  let kind = Number(input.pendingKind || 0);
-  let pick = Number(input.pendingPick || 0);
+  const kind = Number(input.pendingKind || 0);
+  const pick = Number(input.pendingPick || 0);
 
-  if ((kind === 2 || kind === 5) && pick > 0) return { kind, pick };
-
-  const top = input.top;
-  if (pick > 0 && (top?.rank === 2 || top?.rank === 5)) {
-    return { kind: top.rank, pick };
+  // Prefer on-chain pending pick. Never invent one from a stale "Pick two!" call —
+  // that sticks after you dump a 2 (opponent faces it) or after someone already paid.
+  if (pick > 0) {
+    if (kind === 2 || kind === 5) return { kind, pick };
+    if (input.top?.rank === 2 || input.top?.rank === 5) {
+      return { kind: input.top.rank, pick };
+    }
+    return { kind: kind === 2 || kind === 5 ? kind : 0, pick };
   }
 
+  // Optimistic only: opponent just dumped a pick card and the table poll is one tick behind.
+  // Skip once the last call shows the pick was already paid (market / picked N).
   const call = input.lastCall || input.lastPlayed?.call || "";
+  if (/market|picked \d+/i.test(call)) return { kind: 0, pick: 0 };
+
   const played = input.lastPlayed?.who === "opp" ? input.lastPlayed.card : null;
-  if (played?.rank === 2 || /pick two/i.test(call)) {
-    return { kind: 2, pick: pick > 0 ? pick : 2 };
-  }
-  if (played?.rank === 5 || /pick three/i.test(call)) {
-    return { kind: 5, pick: pick > 0 ? pick : 3 };
+  if (
+    played &&
+    (played.rank === 2 || played.rank === 5) &&
+    input.top?.id === played.id
+  ) {
+    return { kind: played.rank, pick: played.rank === 2 ? 2 : 3 };
   }
 
-  if (kind === 2 || kind === 5) return { kind, pick: pick > 0 ? pick : kind === 2 ? 2 : 3 };
   return { kind: 0, pick: 0 };
 }
 
