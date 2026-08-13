@@ -412,7 +412,7 @@ export function useWhot(tableId: number) {
         functionName: "nextTableId",
       })) as bigint,
     );
-    for (let n = latest; n >= 1 && n >= latest - 8; n--) {
+    for (let n = latest; n >= 1 && n >= latest - 24; n--) {
       try {
         const raw = await rpc.readContract({
           address: WHOT_ADDRESS,
