@@ -299,7 +299,7 @@ export function useWhot(tableId: number) {
     const receipt = await publicRpc().waitForTransactionReceipt({
       hash,
       timeout,
-      pollingInterval: 600,
+      pollingInterval: 400,
     });
     if (receipt.status === "reverted") {
       throw new Error("That move reverted on-chain. Try again.");
@@ -745,7 +745,7 @@ export function useWhot(tableId: number) {
           const body = await botRequest({ id: tableId, action: "play" }, 55_000);
           if (body.pending) {
             setStatus("Computer…");
-            await sleep(Math.min(1_200, 350 + attempt * 40));
+            await sleep(Math.min(700, 180 + attempt * 30));
             continue;
           }
           if (!body.ok) throw new Error(body.error || "Computer failed to move.");
@@ -755,7 +755,7 @@ export function useWhot(tableId: number) {
             if (computerToPlay(fresh) || (!fresh && computerToPlay(table))) {
               botKickKey.current = "";
               botKickAt.current = 0;
-              await sleep(700);
+              await sleep(280);
               continue;
             }
             moved = true;
@@ -884,8 +884,8 @@ export function useWhot(tableId: number) {
           attCache.current.set(card.handle.toLowerCase(), packed);
         }
         const hash = await writeWhot("play", [id, index, packed.attestation, packed.signatures, nextShape]);
-        const receipt = await waitTx(hash);
         if (pass) void runBot(true);
+        const receipt = await waitTx(hash);
         for (const log of receipt.logs) {
           try {
             const parsed = decodeEventLog({ abi: whotAbi, data: log.data, topics: log.topics });
@@ -946,6 +946,7 @@ export function useWhot(tableId: number) {
         ? decideComputer(table.top, table.shape, 0, 0, before + draw).catch(() => undefined)
         : null;
       const hash = await writeWhot("goMarket", [id]);
+      if (table?.solo) void runBot(true);
       await waitTx(hash);
       setLastCall(draw > 1 ? `Picked ${draw}` : "Market");
       await refetch();
@@ -957,7 +958,6 @@ export function useWhot(tableId: number) {
       setPendingDraw((n) => (myCardsRef.current.length >= before + draw ? 0 : n));
       setStatus("");
       setBusy(false);
-      void runBot(true);
       void decideP;
     } catch (err) {
       setPendingDraw(0);

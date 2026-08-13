@@ -772,7 +772,9 @@ a,
   flex: 0 0 auto;
   transform-origin: 50% 110%;
   transform: rotate(var(--tilt, 0deg)) translateY(var(--lift, 0px));
-  transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+  transition:
+    transform 0.32s cubic-bezier(0.22, 1, 0.36, 1),
+    margin-left 0.32s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .table-stage {
@@ -1186,19 +1188,19 @@ button.wc {
 }
 
 .pile-face.is-seat .wc {
-  animation: pile-seat 0.42s cubic-bezier(0.16, 1, 0.3, 1);
+  animation: pile-seat 0.34s cubic-bezier(0.22, 0.8, 0.2, 1);
 }
 
 .pile-face.is-catching .wc {
-  opacity: 0.55;
-  transform: scale(0.97);
-  transition: opacity 0.2s ease, transform 0.2s ease;
+  opacity: 0.92;
+  transform: scale(0.985);
+  transition: opacity 0.18s ease, transform 0.18s ease;
 }
 
 @keyframes pile-seat {
   from {
-    transform: translateY(-10px) scale(1.04);
-    opacity: 0.85;
+    transform: translateY(-6px) scale(1.03);
+    opacity: 0.9;
   }
   to {
     transform: none;
@@ -1210,8 +1212,8 @@ button.wc {
   position: fixed;
   z-index: 80;
   pointer-events: none;
-  will-change: transform, opacity;
-  filter: drop-shadow(0 22px 28px rgba(0, 0, 0, 0.42));
+  will-change: transform;
+  filter: drop-shadow(0 18px 22px rgba(0, 0, 0, 0.38));
 }
 
 .fly-card .wc {

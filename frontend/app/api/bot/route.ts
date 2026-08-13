@@ -150,7 +150,7 @@ async function loadHand(id: number, force = false): Promise<HandCache | null> {
 
     const lightning = await zap();
     const revealed = (await lightning.attestedDecrypt(clients.wallet as never, handles, {
-      backoffConfig: { maxRetries: 6, baseDelayInMs: 80, backoffFactor: 1.15 },
+      backoffConfig: { maxRetries: 4, baseDelayInMs: 60, backoffFactor: 1.12 },
     })) as CachedCard["att"][];
 
     const cards: CachedCard[] = revealed.map((att, index) => {
@@ -171,7 +171,7 @@ async function loadHand(id: number, force = false): Promise<HandCache | null> {
   }
 }
 
-async function waitForTurn(id: number, tries = 40) {
+async function waitForTurn(id: number, tries = 24) {
   const clients = houseClients()!;
   for (let i = 0; i < tries; i++) {
     const raw = await clients.publicClient.readContract({
@@ -184,7 +184,7 @@ async function waitForTurn(id: number, tries = 40) {
     if (!table) return null;
     if (table.phase_ === 4 || !isOpen(table.winner_)) return table;
     if (computerToPlay(table) || table.botPending_) return table;
-    await new Promise((r) => setTimeout(r, 120));
+    await new Promise((r) => setTimeout(r, 80));
   }
   return parseTable(
     await clients.publicClient.readContract({
@@ -201,7 +201,11 @@ async function dumpDecision(id: number, table: TableView, decision: Decision) {
   if (decision.move.type === "market") {
     const data = encodeFunctionData({ abi: whotAbi, functionName: "botMarket", args: [BigInt(id)] });
     const hash = await houseSend(WHOT, data, undefined, 2_500_000n);
-    const receipt = await clients.publicClient.waitForTransactionReceipt({ hash, timeout: 90_000 });
+    const receipt = await clients.publicClient.waitForTransactionReceipt({
+      hash,
+      timeout: 12_000,
+      pollingInterval: 300,
+    });
     if (receipt.status === "reverted") throw new Error("Computer market reverted.");
     handCache.delete(id);
     decisions.delete(id);
@@ -226,7 +230,11 @@ async function dumpDecision(id: number, table: TableView, decision: Decision) {
     ],
   });
   const hash = await houseSend(WHOT, data, undefined, 3_000_000n);
-  const receipt = await clients.publicClient.waitForTransactionReceipt({ hash, timeout: 90_000 });
+  const receipt = await clients.publicClient.waitForTransactionReceipt({
+    hash,
+    timeout: 12_000,
+    pollingInterval: 300,
+  });
   if (receipt.status === "reverted") throw new Error("Computer dump reverted.");
   handCache.delete(id);
   decisions.delete(id);
@@ -310,13 +318,14 @@ export async function POST(req: Request) {
     busy.add(id);
 
     try {
+      const warming = loadHand(id).catch(() => null);
       // Browser RPC can lead house RPC by a block right after deal — wait instead of early "done".
-      let live =
+      const live =
         table.phase_ === 3 && table.ready
           ? computerToPlay(table) || table.botPending_
             ? table
             : await waitForTurn(id)
-          : await waitForTurn(id, 50);
+          : await waitForTurn(id, 30);
       if (!live || live.phase_ === 4 || !isOpen(live.winner_)) {
         return NextResponse.json({ ok: true, done: true });
       }
@@ -330,6 +339,8 @@ export async function POST(req: Request) {
       if (live.botPending_) {
         return NextResponse.json(await lockPending(id));
       }
+
+      await warming;
 
       let decision = decisions.get(id);
       if (!decision || (decision.top && live.top && decision.top !== live.top)) {

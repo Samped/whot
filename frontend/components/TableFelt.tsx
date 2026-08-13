@@ -6,7 +6,7 @@ import { isLegal, resolvePickChallenge, SHAPE_NAME, type WhotCard } from "@/lib/
 import type { LastPlay } from "@/hooks/useWhot";
 
 const SHAPES = [1, 2, 3, 4, 5] as const;
-const FLY_MS = 580;
+const FLY_MS = 420;
 
 type Box = { x: number; y: number; w: number; h: number };
 type Flyer = { key: number; who: "me" | "opp"; card: WhotCard; from: Box; to: Box };
@@ -51,31 +51,47 @@ function oppFanOverlap(count: number, tight: boolean) {
   return -38;
 }
 
-function FlyCard({ flyer, onDone }: { flyer: Flyer; onDone: (key: number) => void }) {
+function FlyCard({
+  flyer,
+  onArrive,
+  onDone,
+}: {
+  flyer: Flyer;
+  onArrive: (card: WhotCard) => void;
+  onDone: (key: number) => void;
+}) {
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
-    const { from, to, key } = flyer;
+    const { from, to, key, who, card } = flyer;
     const dx = to.x - from.x;
     const dy = to.y - from.y;
     const sx = to.w / Math.max(from.w, 1);
     const sy = to.h / Math.max(from.h, 1);
+    const lift = Math.min(72, Math.abs(dy) * 0.22 + 18);
+    const spin = who === "me" ? 10 : -8;
     el.style.opacity = "1";
-    el.style.transform = "translate3d(0,0,0) scale(1) rotate(0deg)";
-    el.style.transition = "none";
-    let frame2 = 0;
-    const frame1 = requestAnimationFrame(() => {
-      frame2 = requestAnimationFrame(() => {
-        el.style.transition = `transform ${FLY_MS}ms cubic-bezier(0.16, 1, 0.3, 1), opacity ${Math.round(FLY_MS * 0.85)}ms ease-out`;
-        el.style.transform = `translate3d(${dx}px, ${dy}px, 0) scale(${sx}, ${sy})`;
-      });
-    });
-    const done = window.setTimeout(() => onDone(key), FLY_MS + 40);
+    const motion = el.animate(
+      [
+        { transform: "translate3d(0,0,0) scale(1) rotate(0deg)", offset: 0 },
+        {
+          transform: `translate3d(${dx * 0.42}px, ${dy * 0.38 - lift}px, 0) scale(${1 + (sx - 1) * 0.4}, ${1 + (sy - 1) * 0.4}) rotate(${spin}deg)`,
+          offset: 0.42,
+        },
+        {
+          transform: `translate3d(${dx}px, ${dy}px, 0) scale(${sx}, ${sy}) rotate(0deg)`,
+          offset: 1,
+        },
+      ],
+      { duration: FLY_MS, easing: "cubic-bezier(0.22, 0.7, 0.2, 1)", fill: "forwards" },
+    );
+    const seat = window.setTimeout(() => onArrive(card), Math.round(FLY_MS * 0.68));
+    const done = window.setTimeout(() => onDone(key), FLY_MS + 16);
     return () => {
-      cancelAnimationFrame(frame1);
-      cancelAnimationFrame(frame2);
+      motion.cancel();
+      window.clearTimeout(seat);
       window.clearTimeout(done);
     };
   }, [flyer.key]); // eslint-disable-line react-hooks/exhaustive-deps — animate once per flight key
@@ -143,7 +159,6 @@ export function TableFelt({
 
   const [pickShapeFor, setPickShapeFor] = useState<number | null>(null);
   const [heldTop, setHeldTop] = useState<WhotCard | null>(top);
-  const [hideMine, setHideMine] = useState<number | null>(null);
   const [flyer, setFlyer] = useState<Flyer | null>(null);
   const [seatTick, setSeatTick] = useState(0);
   const [lifted, setLifted] = useState<number | null>(null);
@@ -158,7 +173,6 @@ export function TableFelt({
     if (flyerRef.current) return;
     if (!top) return;
     setHeldTop(top);
-    setHideMine(null);
   }, [top?.id, busy, flyer]);
 
   function pileBox() {
@@ -177,13 +191,11 @@ export function TableFelt({
   function launch(who: "me" | "opp", card: WhotCard, fromEl: Element | null) {
     if (reducedMotion()) {
       setHeldTop(card);
-      setHideMine(null);
       return;
     }
     const to = pileBox();
     if (!to) {
       setHeldTop(card);
-      setHideMine(null);
       return;
     }
     enqueue({
@@ -195,25 +207,24 @@ export function TableFelt({
     });
   }
 
+  const seatFly = useCallback((card: WhotCard) => {
+    setHeldTop(card);
+    setSeatTick((n) => n + 1);
+  }, []);
+
   const finishFly = useCallback((key: number) => {
     const flew = flyerRef.current;
     if (!flew || flew.key !== key) return;
     const chain = topRef.current;
     setHeldTop(chain?.id === flew.card.id ? chain : flew.card);
-    setSeatTick((n) => n + 1);
     const next = queue.current.shift() ?? null;
     flyerRef.current = next;
     setFlyer(next);
-    if (!next) setHideMine(null);
   }, []);
 
   useEffect(() => {
     if (!lastPlayed || lastPlayed.who !== "opp" || !lastPlayed.card) return;
     if (heldTop?.id === lastPlayed.card.id) return;
-    if (top?.id === lastPlayed.card.id) {
-      setHeldTop(lastPlayed.card);
-      return;
-    }
     launch("opp", lastPlayed.card, oppRef.current?.querySelector(".wc") ?? oppRef.current);
   }, [lastPlayed?.key]);
 
@@ -250,11 +261,10 @@ export function TableFelt({
     lastPlayed,
   });
   const legalTop = challenge.kind ? top ?? heldTop : heldTop ?? top;
-  const inputLocked = busy || sealedPending > 0 || hideMine !== null || flyer?.who === "me";
+  const inputLocked = busy || sealedPending > 0 || flyer?.who === "me";
 
   function runMine(index: number, nextShape: number, card: WhotCard) {
     setLifted(null);
-    setHideMine(index);
     launch("me", card, slotRefs.current[index]?.querySelector(".wc") ?? slotRefs.current[index]);
     onPlay(index, nextShape);
   }
@@ -388,7 +398,6 @@ export function TableFelt({
         )}
         <div className={`fan my-fan${denseHand ? " is-dense" : ""}${shownMine <= 4 ? " is-few" : ""}`} ref={fanRef}>
           {myCards.map((card, i) => {
-            if (hideMine === i) return <span key={`gone-${i}`} className="wc-ghost" />;
             const ok =
               myTurn &&
               live &&
@@ -438,7 +447,7 @@ export function TableFelt({
         </div>
       </div>
 
-      {flyer ? <FlyCard flyer={flyer} onDone={finishFly} /> : null}
+      {flyer ? <FlyCard flyer={flyer} onArrive={seatFly} onDone={finishFly} /> : null}
 
       {pickShapeFor !== null && (
         <div className="modal shape-modal">
