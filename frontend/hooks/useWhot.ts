@@ -51,8 +51,8 @@ const SHUFFLE_GAS = 3_000_000n;
 const BOT_GAS = 4_000_000n;
 const MOVE_GAS = 2_500_000n;
 const GAS_CAP = 6_000_000n;
-const FEE_FALLBACK = {
-  maxFeePerGas: 1_000_000_000n,
+const FEE_FLOOR = {
+  maxFeePerGas: 100_000_000n, // 0.1 gwei
   maxPriorityFeePerGas: 10_000_000n,
 };
 
@@ -63,24 +63,34 @@ export type LastPlay = {
   call: string;
 };
 
-type NonceCache = { address: string; next: number; at: number };
-let nonceCache: NonceCache | null = null;
+let writeChain: Promise<unknown> = Promise.resolve();
 
-async function takeNonce(address: Address): Promise<number> {
-  const key = address.toLowerCase();
-  if (nonceCache && nonceCache.address === key && Date.now() - nonceCache.at < 20_000) {
-    const n = nonceCache.next;
-    nonceCache.next += 1;
-    nonceCache.at = Date.now();
-    return n;
-  }
-  const n = await publicRpc().getTransactionCount({ address, blockTag: "pending" });
-  nonceCache = { address: key, next: Number(n) + 1, at: Date.now() };
-  return Number(n);
+function enqueueWrite<T>(fn: () => Promise<T>): Promise<T> {
+  const run = writeChain.then(fn, fn);
+  writeChain = run.then(
+    () => undefined,
+    () => undefined,
+  );
+  return run;
 }
 
-function resetNonce() {
-  nonceCache = null;
+async function feeCaps() {
+  try {
+    const fees = await publicRpc().estimateFeesPerGas();
+    const tip = fees.maxPriorityFeePerGas ?? FEE_FLOOR.maxPriorityFeePerGas;
+    const max = fees.maxFeePerGas ?? FEE_FLOOR.maxFeePerGas;
+    return {
+      maxPriorityFeePerGas: tip > FEE_FLOOR.maxPriorityFeePerGas ? tip : FEE_FLOOR.maxPriorityFeePerGas,
+      maxFeePerGas: max > FEE_FLOOR.maxFeePerGas ? max : FEE_FLOOR.maxFeePerGas,
+    };
+  } catch {
+    return FEE_FLOOR;
+  }
+}
+
+async function freshNonce(address: Address): Promise<number> {
+  const n = await publicRpc().getTransactionCount({ address, blockTag: "pending" });
+  return Number(n);
 }
 
 type PackedAtt = ReturnType<typeof packUintAttestation>;
@@ -201,7 +211,7 @@ export function useWhot(tableId: number) {
       return walletClient;
     }
     setStatus("Opening the table…");
-    const session = await gameAccount.ensureReady(dealFee + 1_000_000_000_000_000n);
+    const session = await gameAccount.ensureReady(dealFee + 600_000_000_000_000n);
     fundedRef.current = true;
     if (needSession) {
       setStatus("Opening sealed hand…");
@@ -212,64 +222,73 @@ export function useWhot(tableId: number) {
 
   const writeWhot = useCallback(
     async (functionName: string, args?: readonly unknown[], value?: bigint) => {
-      const client = await prepare(false);
-      const shuffle = functionName === "openSolo" || functionName === "joinAndDeal";
-      const bot = functionName === "botThink";
-      if (shuffle) setStatus("Shuffling the pack on-chain…");
-      else if (bot) setStatus("Computer picking a card…");
-      const from = (client.account?.address || address) as Address | undefined;
-      if (!from) throw new Error("Table account is not ready.");
-      let nonce: number;
-      try {
-        nonce = await withTimeout(takeNonce(from), 6_000, "Could not read nonce.");
-      } catch {
-        resetNonce();
-        nonce = await takeNonce(from);
-      }
-      const data = encodeFunctionData({
-        abi: whotAbi,
-        functionName: functionName as never,
-        ...(args ? { args: args as never } : {}),
+      return enqueueWrite(async () => {
+        const client = await prepare(false);
+        const shuffle = functionName === "openSolo" || functionName === "joinAndDeal";
+        const bot = functionName === "botThink";
+        if (shuffle) setStatus("Shuffling the pack on-chain…");
+        else if (bot) setStatus("Computer picking a card…");
+        const from = (client.account?.address || address) as Address | undefined;
+        if (!from) throw new Error("Table account is not ready.");
+
+        const data = encodeFunctionData({
+          abi: whotAbi,
+          functionName: functionName as never,
+          ...(args ? { args: args as never } : {}),
+        });
+        let gas = shuffle ? SHUFFLE_GAS : bot ? BOT_GAS : MOVE_GAS;
+        try {
+          const est = await withTimeout(
+            publicRpc().estimateGas({ account: from, to: WHOT_ADDRESS, data, value }),
+            8_000,
+            "gas",
+          );
+          const padded = (est * 130n) / 100n;
+          gas = padded < 1_500_000n ? 1_500_000n : padded > GAS_CAP ? GAS_CAP : padded;
+        } catch {
+          /* keep the function default */
+        }
+
+        const fees = await feeCaps();
+        const payload = {
+          to: WHOT_ADDRESS,
+          data,
+          value,
+          chain: activeChain,
+          account: client.account,
+          gas,
+          maxFeePerGas: fees.maxFeePerGas,
+          maxPriorityFeePerGas: fees.maxPriorityFeePerGas,
+        };
+
+        const sendOnce = async (nonce: number) =>
+          (await withTimeout(
+            client.sendTransaction({ ...payload, nonce }),
+            25_000,
+            "The table transaction is taking too long. Tap again.",
+          )) as Hex;
+
+        let nonce = await withTimeout(freshNonce(from), 8_000, "Could not read nonce.");
+        try {
+          return await sendOnce(nonce);
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          if (/already known|replacement|nonce too low/i.test(msg)) {
+            // A prior tap likely already broadcast. Wait for it to clear, then
+            // either reuse the cleared lane or continue with the next nonce.
+            await sleep(2_500);
+            const pending = await freshNonce(from);
+            if (pending > nonce) {
+              throw new Error("Previous move is confirming. Wait a moment, then tap again.");
+            }
+            return await sendOnce(pending);
+          }
+          if (!/internal|timeout|dropped|rpc/i.test(msg)) throw err;
+          await sleep(800);
+          nonce = await freshNonce(from);
+          return await sendOnce(nonce);
+        }
       });
-      let gas = shuffle ? SHUFFLE_GAS : bot ? BOT_GAS : MOVE_GAS;
-      try {
-        const est = await withTimeout(
-          publicRpc().estimateGas({ account: from, to: WHOT_ADDRESS, data, value }),
-          8_000,
-          "gas",
-        );
-        const padded = (est * 130n) / 100n;
-        gas = padded < 1_500_000n ? 1_500_000n : padded > GAS_CAP ? GAS_CAP : padded;
-      } catch {
-        /* keep the function default */
-      }
-      const payload = {
-        to: WHOT_ADDRESS,
-        data,
-        value,
-        chain: activeChain,
-        account: client.account,
-        gas,
-        maxFeePerGas: FEE_FALLBACK.maxFeePerGas,
-        maxPriorityFeePerGas: FEE_FALLBACK.maxPriorityFeePerGas,
-      };
-      try {
-        return (await withTimeout(
-          client.sendTransaction({ ...payload, nonce }),
-          20_000,
-          "The table transaction is taking too long. Tap again.",
-        )) as Hex;
-      } catch (err) {
-        resetNonce();
-        const msg = err instanceof Error ? err.message : String(err);
-        if (!/internal|nonce|timeout|dropped/i.test(msg)) throw err;
-        const fresh = await publicRpc().getTransactionCount({ address: from, blockTag: "pending" });
-        return (await withTimeout(
-          client.sendTransaction({ ...payload, nonce: Number(fresh) }),
-          20_000,
-          "The table transaction is taking too long. Tap again.",
-        )) as Hex;
-      }
     },
     [prepare, address],
   );
@@ -515,6 +534,7 @@ export function useWhot(tableId: number) {
       setError("Sign in with email or a wallet before you sit.");
       return 0;
     }
+    if (busy) return 0;
     setBusy(true);
     setError(null);
     setStatus("Setting the table…");
@@ -582,7 +602,7 @@ export function useWhot(tableId: number) {
       setBusy(false);
       setStatus("");
     }
-  }, [writeWhot, dealFee, address, findActiveSolo, lockOpener, gameAccount.signedIn, gameAccount.requestLogin]);
+  }, [writeWhot, dealFee, address, findActiveSolo, lockOpener, gameAccount.signedIn, gameAccount.requestLogin, busy]);
 
   const openTable = useCallback(async () => {
     if (!WHOT_ADDRESS || !publicClient) return 0;

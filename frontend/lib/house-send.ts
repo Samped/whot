@@ -8,13 +8,12 @@ import {
 import { privateKeyToAccount } from "viem/accounts";
 import { baseSepolia } from "viem/chains";
 
-const FEE = {
-  maxFeePerGas: 1_000_000_000n,
+const FEE_FLOOR = {
+  maxFeePerGas: 100_000_000n,
   maxPriorityFeePerGas: 10_000_000n,
 };
 
 let chain: Promise<unknown> = Promise.resolve();
-let cachedNonce: { next: number; at: number } | null = null;
 
 export function houseAccount(): Account | null {
   const raw = process.env.HOUSE_PRIVATE_KEY || process.env.PRIVATE_KEY_BASE_SEPOLIA || "";
@@ -52,48 +51,62 @@ function enqueue<T>(fn: () => Promise<T>): Promise<T> {
   return run;
 }
 
+function sleep(ms: number) {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
+async function feeCaps(publicClient: ReturnType<typeof createPublicClient>) {
+  try {
+    const fees = await publicClient.estimateFeesPerGas();
+    const tip = fees.maxPriorityFeePerGas ?? FEE_FLOOR.maxPriorityFeePerGas;
+    const max = fees.maxFeePerGas ?? FEE_FLOOR.maxFeePerGas;
+    return {
+      maxPriorityFeePerGas: tip > FEE_FLOOR.maxPriorityFeePerGas ? tip : FEE_FLOOR.maxPriorityFeePerGas,
+      maxFeePerGas: max > FEE_FLOOR.maxFeePerGas ? max : FEE_FLOOR.maxFeePerGas,
+    };
+  } catch {
+    return FEE_FLOOR;
+  }
+}
+
 export async function houseSend(to: Hex, data?: Hex, value?: bigint, gas?: bigint): Promise<Hex> {
   const clients = houseClients();
   if (!clients) throw new Error("House wallet is not configured.");
   const { account, publicClient, wallet } = clients;
 
   return enqueue(async () => {
-    const fresh = await publicClient.getTransactionCount({
-      address: account.address,
-      blockTag: "pending",
-    });
-    const next =
-      cachedNonce && Date.now() - cachedNonce.at < 20_000
-        ? Math.max(cachedNonce.next, Number(fresh))
-        : Number(fresh);
-    cachedNonce = { next: next + 1, at: Date.now() };
-    try {
-      return await wallet.sendTransaction({
+    const fees = await feeCaps(publicClient);
+    const sendOnce = async (nonce: number) =>
+      wallet.sendTransaction({
         to,
         data,
         value,
         gas,
-        nonce: next,
-        maxFeePerGas: FEE.maxFeePerGas,
-        maxPriorityFeePerGas: FEE.maxPriorityFeePerGas,
+        nonce,
+        maxFeePerGas: fees.maxFeePerGas,
+        maxPriorityFeePerGas: fees.maxPriorityFeePerGas,
       });
+
+    let nonce = Number(
+      await publicClient.getTransactionCount({
+        address: account.address,
+        blockTag: "pending",
+      }),
+    );
+
+    try {
+      return await sendOnce(nonce);
     } catch (err) {
-      cachedNonce = null;
       const msg = err instanceof Error ? err.message : String(err);
-      if (/already known|nonce/i.test(msg)) {
-        const retry = await publicClient.getTransactionCount({
-          address: account.address,
-          blockTag: "pending",
-        });
-        return await wallet.sendTransaction({
-          to,
-          data,
-          value,
-          gas,
-          nonce: Number(retry),
-          maxFeePerGas: FEE.maxFeePerGas,
-          maxPriorityFeePerGas: FEE.maxPriorityFeePerGas,
-        });
+      if (/already known|replacement|nonce too low/i.test(msg)) {
+        await sleep(2_000);
+        nonce = Number(
+          await publicClient.getTransactionCount({
+            address: account.address,
+            blockTag: "pending",
+          }),
+        );
+        return await sendOnce(nonce);
       }
       throw err;
     }
