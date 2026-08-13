@@ -57,12 +57,12 @@ export function friendlyError(err: unknown): string {
     return "The network dropped that move. Tap again.";
   }
 
-  if (/previous move is confirming/i.test(raw)) {
-    return "Previous move is confirming. Wait a moment, then tap again.";
+  if (/MOVE_CONFIRMING|previous move is confirming/i.test(raw)) {
+    return "Finishing your last deal. Wait a moment…";
   }
 
   if (/nonce|already known|replacement/i.test(raw)) {
-    return "Previous move is confirming. Wait a moment, then tap again.";
+    return "Finishing your last deal. Wait a moment, then tap Play again if the table does not open.";
   }
 
   if (/failed to decrypt|attesteddecrypt|not (yet )?ready|unknown handle|open sealed|sealed hand|couldn.?t open/i.test(raw)) {

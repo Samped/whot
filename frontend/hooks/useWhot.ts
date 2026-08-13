@@ -273,13 +273,12 @@ export function useWhot(tableId: number) {
           return await sendOnce(nonce);
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err);
-          if (/already known|replacement|nonce too low/i.test(msg)) {
-            // A prior tap likely already broadcast. Wait for it to clear, then
-            // either reuse the cleared lane or continue with the next nonce.
-            await sleep(2_500);
+          if (/already known|replacement|nonce too low|confirming/i.test(msg)) {
+            await sleep(2_000);
             const pending = await freshNonce(from);
             if (pending > nonce) {
-              throw new Error("Previous move is confirming. Wait a moment, then tap again.");
+              // Prior broadcast likely landed — caller (openSolo) can resume the table.
+              throw new Error("MOVE_CONFIRMING");
             }
             return await sendOnce(pending);
           }
@@ -596,6 +595,20 @@ export function useWhot(tableId: number) {
       await lockOpener(created);
       return created;
     } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      // A previous tap already broadcast openSolo — pick up that table instead of erroring.
+      if (address && /MOVE_CONFIRMING|already known|nonce|replacement|confirming/i.test(msg)) {
+        setStatus("Finishing the deal that was already sent…");
+        for (let i = 0; i < 10; i++) {
+          await sleep(1_500);
+          const existing = await findActiveSolo(address).catch(() => 0);
+          if (existing > 0) {
+            await lockOpener(existing);
+            setError(null);
+            return existing;
+          }
+        }
+      }
       setError(friendlyError(err));
       return 0;
     } finally {
