@@ -59,13 +59,24 @@ const GameAccountContext = createContext<GameAccountValue | null>(null);
 const EMAIL_ACTIVE = "whot.emailActive.v1";
 
 async function requestFaucet(address: Address) {
-  const res = await fetch("/api/faucet", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ address }),
-  });
-  const body = (await res.json().catch(() => ({}))) as { error?: string };
-  if (!res.ok) throw new Error(body.error || "Could not fund table account.");
+  let last = "Could not fund table account.";
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const res = await fetch("/api/faucet", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ address }),
+    });
+    const body = (await res.json().catch(() => ({}))) as { error?: string; ok?: boolean };
+    if (res.ok) return;
+    last = body.error || last;
+    // Funding race / confirming top-up — brief wait then retry.
+    if (/confirming|topping up|try again/i.test(last) || res.status === 503) {
+      await new Promise((r) => setTimeout(r, 2_000 + attempt * 1_000));
+      continue;
+    }
+    break;
+  }
+  throw new Error(last);
 }
 
 function markEmailActive() {

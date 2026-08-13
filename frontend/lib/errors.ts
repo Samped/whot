@@ -49,6 +49,10 @@ export function friendlyError(err: unknown): string {
     return "House bankroll is empty. Fund the house wallet with Base Sepolia ETH, or add CDP_API_KEY_ID + CDP_API_KEY_SECRET so it can refill itself.";
   }
 
+  if (/funding is still confirming|could not fund table account|house funding transaction/i.test(raw)) {
+    return "Funding your table account. Wait a few seconds, then tap Play again.";
+  }
+
   if (/gas limit too high/i.test(raw)) {
     return "That move asked for too much gas. Tap again.";
   }
@@ -57,7 +61,7 @@ export function friendlyError(err: unknown): string {
     return "The network dropped that move. Tap again.";
   }
 
-  if (/MOVE_CONFIRMING|previous move is confirming/i.test(raw)) {
+  if (/MOVE_CONFIRMING|previous move is confirming|finishing your last deal/i.test(raw)) {
     return "Finishing your last deal. Wait a moment…";
   }
 

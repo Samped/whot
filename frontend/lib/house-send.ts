@@ -98,17 +98,28 @@ export async function houseSend(to: Hex, data?: Hex, value?: bigint, gas?: bigin
       return await sendOnce(nonce);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      if (/already known|replacement|nonce too low/i.test(msg)) {
-        await sleep(2_000);
-        nonce = Number(
+      if (!/already known|replacement|nonce too low/i.test(msg)) throw err;
+
+      // Wait for the house nonce lane to clear, then send once more.
+      for (let i = 0; i < 6; i++) {
+        await sleep(1_500);
+        const latest = Number(
+          await publicClient.getTransactionCount({
+            address: account.address,
+            blockTag: "latest",
+          }),
+        );
+        const pending = Number(
           await publicClient.getTransactionCount({
             address: account.address,
             blockTag: "pending",
           }),
         );
-        return await sendOnce(nonce);
+        if (pending === latest) {
+          return await sendOnce(pending);
+        }
       }
-      throw err;
+      throw new Error("House funding transaction is still confirming. Try again shortly.");
     }
   });
 }
