@@ -713,7 +713,7 @@ function PvpScreen({ tableId }: { tableId: number }) {
               game.seat >= 0 &&
               !game.myTurn &&
               phase === 3 &&
-              Boolean(game.error) && (
+              Boolean(game.error || game.computerStuck) && (
               <button className="btn primary" disabled={game.busy} onClick={() => void game.nudgeComputer()}>
                 {game.busy ? game.status || "Computer moving…" : "Nudge the computer"}
               </button>

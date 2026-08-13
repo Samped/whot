@@ -130,6 +130,8 @@ export function useWhot(tableId: number) {
   const [lastPlayed, setLastPlayed] = useState<LastPlay | null>(null);
   const botLock = useRef(false);
   const botKickKey = useRef("");
+  const botKickAt = useRef(0);
+  const [computerStuck, setComputerStuck] = useState(false);
   const openerLock = useRef(false);
   const openerKickKey = useRef("");
   const settleKickKey = useRef("");
@@ -202,7 +204,8 @@ export function useWhot(tableId: number) {
   );
 
   const refetch = useCallback(async () => {
-    await Promise.all([tableQuery.refetch(), openerQuery.refetch(), botPackedQuery.refetch()]);
+    const [next] = await Promise.all([tableQuery.refetch(), openerQuery.refetch(), botPackedQuery.refetch()]);
+    return parseTable(next.data);
   }, [tableQuery, openerQuery, botPackedQuery]);
 
   const prepare = useCallback(async (needSession = false) => {
@@ -730,22 +733,33 @@ export function useWhot(tableId: number) {
     async (force = false) => {
       if (!WHOT_ADDRESS || tableId <= 0) return;
       if (!force && !computerToPlay(table)) return;
-      if (botLock.current) return;
+      if (botLock.current) return false;
       botLock.current = true;
       setError(null);
+      setComputerStuck(false);
       setStatus("Computer…");
+      let moved = false;
       try {
-        for (let attempt = 0; attempt < 6; attempt++) {
+        // Cold Inco decrypt can take ~25s; keep polling while the house lane is busy.
+        for (let attempt = 0; attempt < 40; attempt++) {
           const body = await botRequest({ id: tableId, action: "play" }, 55_000);
           if (body.pending) {
             setStatus("Computer…");
-            await sleep(280);
+            await sleep(Math.min(1_200, 350 + attempt * 40));
             continue;
           }
           if (!body.ok) throw new Error(body.error || "Computer failed to move.");
           if (body.done) {
-            await refetch();
-            return;
+            const fresh = await refetch();
+            // RPC lag can report "done" before the table is actually live / computer to play.
+            if (computerToPlay(fresh) || (!fresh && computerToPlay(table))) {
+              botKickKey.current = "";
+              botKickAt.current = 0;
+              await sleep(700);
+              continue;
+            }
+            moved = true;
+            return true;
           }
           if (body.card) {
             const played: LastPlay = {
@@ -763,14 +777,27 @@ export function useWhot(tableId: number) {
           }
           await refetch();
           void peekHand();
-          return;
+          moved = true;
+          return true;
         }
+        botKickKey.current = "";
+        botKickAt.current = 0;
+        setComputerStuck(true);
+        setStatus("Computer is taking longer…");
+        return false;
       } catch (err) {
         await refetch();
+        botKickKey.current = "";
+        botKickAt.current = 0;
+        setComputerStuck(true);
         setError(friendlyError(err));
+        return false;
       } finally {
         botLock.current = false;
-        setStatus("");
+        if (moved) {
+          setComputerStuck(false);
+          setStatus("");
+        }
       }
     },
     [table, tableId, refetch, peekHand],
@@ -778,14 +805,35 @@ export function useWhot(tableId: number) {
 
   useEffect(() => {
     if (seat < 0 || !computerToPlay(table)) {
-      if (!computerToPlay(table)) botKickKey.current = "";
+      if (!computerToPlay(table)) {
+        botKickKey.current = "";
+        botKickAt.current = 0;
+        setComputerStuck(false);
+      }
       return;
     }
     const key = `${tableId}:${table?.turn_}:${table?.hand1}:${table?.botPending_ ? 1 : 0}`;
     if (botKickKey.current === key) return;
+    if (botLock.current) return;
     botKickKey.current = key;
+    botKickAt.current = Date.now();
     void runBot(true);
   }, [seat, tableId, table, runBot]);
+
+  // Re-arm the computer kick if a one-shot attempt died silently.
+  useEffect(() => {
+    if (seat < 0 || !computerToPlay(table)) return;
+    const timer = setInterval(() => {
+      if (!computerToPlay(table) || botLock.current) return;
+      const waited = Date.now() - (botKickAt.current || 0);
+      if (botKickAt.current && waited < 8_000) return;
+      botKickKey.current = "";
+      botKickAt.current = 0;
+      setComputerStuck(true);
+      void runBot(true);
+    }, 4_000);
+    return () => clearInterval(timer);
+  }, [seat, table, runBot]);
 
   const decideComputer = useCallback(
     async (expectTop: number, expectShape: number, expectPickKind: number, expectPick: number, oppCount: number) => {
@@ -941,6 +989,7 @@ export function useWhot(tableId: number) {
     joinAndDeal,
     playCard: playCardOnChain,
     nudgeComputer: () => runBot(true),
+    computerStuck,
     goMarket,
     peekHand,
     opponentCount: seat === 0 ? (table?.hand1 ?? 0) : seat === 1 ? (table?.hand0 ?? 0) : 0,

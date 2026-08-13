@@ -200,7 +200,9 @@ async function dumpDecision(id: number, table: TableView, decision: Decision) {
   const clients = houseClients()!;
   if (decision.move.type === "market") {
     const data = encodeFunctionData({ abi: whotAbi, functionName: "botMarket", args: [BigInt(id)] });
-    await houseSend(WHOT, data, undefined, 2_500_000n);
+    const hash = await houseSend(WHOT, data, undefined, 2_500_000n);
+    const receipt = await clients.publicClient.waitForTransactionReceipt({ hash, timeout: 90_000 });
+    if (receipt.status === "reverted") throw new Error("Computer market reverted.");
     handCache.delete(id);
     decisions.delete(id);
     return { card: 0, call: "Computer went market" };
@@ -223,10 +225,13 @@ async function dumpDecision(id: number, table: TableView, decision: Decision) {
       decision.move.nextShape,
     ],
   });
-  await houseSend(WHOT, data, undefined, 3_000_000n);
+  const hash = await houseSend(WHOT, data, undefined, 3_000_000n);
+  const receipt = await clients.publicClient.waitForTransactionReceipt({ hash, timeout: 90_000 });
+  if (receipt.status === "reverted") throw new Error("Computer dump reverted.");
   handCache.delete(id);
   decisions.delete(id);
-  return { card: decision.card, call: decision.call };
+  const played = playedFromReceipt(receipt.logs);
+  return { card: played.card || decision.card, call: played.call || decision.call };
 }
 
 export async function POST(req: Request) {
@@ -305,13 +310,22 @@ export async function POST(req: Request) {
     busy.add(id);
 
     try {
-      if (table.phase_ !== 3 || !table.ready) {
+      // Browser RPC can lead house RPC by a block right after deal — wait instead of early "done".
+      let live =
+        table.phase_ === 3 && table.ready
+          ? computerToPlay(table) || table.botPending_
+            ? table
+            : await waitForTurn(id)
+          : await waitForTurn(id, 50);
+      if (!live || live.phase_ === 4 || !isOpen(live.winner_)) {
         return NextResponse.json({ ok: true, done: true });
       }
-
-      const live = computerToPlay(table) || table.botPending_ ? table : await waitForTurn(id);
-      if (!live || live.phase_ !== 3) return NextResponse.json({ ok: true, done: true });
-      if (!computerToPlay(live) && !live.botPending_) return NextResponse.json({ ok: true, done: true });
+      if (live.phase_ !== 3 || !live.ready) {
+        return NextResponse.json({ ok: true, pending: true });
+      }
+      if (!computerToPlay(live) && !live.botPending_) {
+        return NextResponse.json({ ok: true, done: true });
+      }
 
       if (live.botPending_) {
         return NextResponse.json(await lockPending(id));
