@@ -669,7 +669,10 @@ function PvpScreen({ tableId }: { tableId: number }) {
                 ? "The computer wins."
                 : `${short(game.table?.winner_)} wins!`
             : countingRanks
-              ? game.status || "Counting the ranks in each hand…"
+              ? game.status ||
+                (game.settleStuck
+                  ? "Still opening sealed ranks… tap Count ranks again if this hangs."
+                  : "Counting the ranks in each hand…")
               : phase === 2
               ? game.status || "Locking the opener…"
               : game.sealedPending > 0
@@ -712,11 +715,21 @@ function PvpScreen({ tableId }: { tableId: number }) {
             >
               {game.peeking ? "Opening hand…" : game.myCards.length === 0 ? "Open sealed hand" : "Refresh hand"}
             </button>
+            {countingRanks && game.seat >= 0 && (
+              <button
+                className="btn primary"
+                disabled={game.busy}
+                onClick={() => void game.nudgeSettle()}
+              >
+                {game.busy || game.status ? game.status || "Counting ranks…" : "Count ranks again"}
+              </button>
+            )}
             {live &&
               game.table?.solo &&
               game.seat >= 0 &&
               !game.myTurn &&
               phase === 3 &&
+              !countingRanks &&
               Boolean(game.error || game.computerStuck) && (
               <button className="btn primary" disabled={game.busy} onClick={() => void game.nudgeComputer()}>
                 {game.busy ? game.status || "Computer moving…" : "Nudge the computer"}

@@ -134,7 +134,10 @@ export function useWhot(tableId: number) {
   const [computerStuck, setComputerStuck] = useState(false);
   const openerLock = useRef(false);
   const openerKickKey = useRef("");
+  const settleLock = useRef(false);
   const settleKickKey = useRef("");
+  const settleKickAt = useRef(0);
+  const [settleStuck, setSettleStuck] = useState(false);
   const peekLock = useRef(false);
   const peekDirty = useRef(false);
   const peekedKey = useRef("");
@@ -473,35 +476,57 @@ export function useWhot(tableId: number) {
 
   const settleMarket = useCallback(async () => {
     if (!WHOT_ADDRESS || tableId <= 0) return;
-    if (openerLock.current) return;
-    openerLock.current = true;
+    if (settleLock.current) return false;
+    settleLock.current = true;
+    settleKickAt.current = Date.now();
     setError(null);
+    setSettleStuck(false);
     setStatus("Counting the ranks in each hand…");
     try {
-      const res = await fetch("/api/settle", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ id: tableId }),
-        signal: AbortSignal.timeout(90_000),
-      });
-      const body = (await res.json().catch(() => ({}))) as {
-        error?: string;
-        pending?: boolean;
-        done?: boolean;
-      };
-      if (body.pending) {
-        setStatus("Still counting hands…");
-        return;
+      for (let attempt = 0; attempt < 24; attempt++) {
+        const res = await fetch("/api/settle", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ id: tableId }),
+          signal: AbortSignal.timeout(55_000),
+        });
+        const body = (await res.json().catch(() => ({}))) as {
+          error?: string;
+          pending?: boolean;
+          done?: boolean;
+        };
+        if (body.pending) {
+          setStatus("Still counting hands…");
+          await sleep(Math.min(2_000, 500 + attempt * 120));
+          const fresh = await refetch();
+          if (fresh?.phase_ === 4) {
+            setSettleStuck(false);
+            setStatus("");
+            return true;
+          }
+          continue;
+        }
+        if (!res.ok && !body.done) throw new Error(body.error || "Could not count the hands.");
+        await refetch();
+        setSettleStuck(false);
+        setStatus("");
+        return true;
       }
-      if (!res.ok && !body.done) throw new Error(body.error || "Could not count the hands.");
-      await refetch();
+      settleKickKey.current = "";
+      settleKickAt.current = 0;
+      setSettleStuck(true);
+      setStatus("Still counting hands…");
+      return false;
     } catch (err) {
       await refetch();
+      settleKickKey.current = "";
+      settleKickAt.current = 0;
+      setSettleStuck(true);
       const msg = friendlyError(err);
       if (!/wrongphase|already|settling/i.test(msg)) setError(msg);
+      return false;
     } finally {
-      openerLock.current = false;
-      setStatus("");
+      settleLock.current = false;
     }
   }, [refetch, tableId]);
 
@@ -519,15 +544,36 @@ export function useWhot(tableId: number) {
 
   useEffect(() => {
     if (!table?.marketEnd_ || table.phase_ !== 3) {
-      if (table?.phase_ === 4) settleKickKey.current = "";
+      if (table?.phase_ === 4) {
+        settleKickKey.current = "";
+        settleKickAt.current = 0;
+        setSettleStuck(false);
+      }
       return;
     }
     const key = `${tableId}:settle`;
     if (settleKickKey.current === key) return;
+    if (settleLock.current) return;
     settleKickKey.current = key;
-    const t = setTimeout(() => void settleMarket(), 250);
+    settleKickAt.current = Date.now();
+    const t = setTimeout(() => void settleMarket(), 200);
     return () => clearTimeout(t);
   }, [table?.marketEnd_, table?.phase_, tableId, settleMarket]);
+
+  // Re-arm market settle if the one-shot kick died silently.
+  useEffect(() => {
+    if (!table?.marketEnd_ || table.phase_ !== 3) return;
+    const timer = setInterval(() => {
+      if (!table.marketEnd_ || table.phase_ !== 3 || settleLock.current) return;
+      const waited = Date.now() - (settleKickAt.current || 0);
+      if (settleKickAt.current && waited < 10_000) return;
+      settleKickKey.current = "";
+      settleKickAt.current = 0;
+      setSettleStuck(true);
+      void settleMarket();
+    }, 5_000);
+    return () => clearInterval(timer);
+  }, [table?.marketEnd_, table?.phase_, table, settleMarket]);
 
   const openSolo = useCallback(async (forceNew = false) => {
     if (!WHOT_ADDRESS) return 0;
@@ -990,6 +1036,12 @@ export function useWhot(tableId: number) {
     playCard: playCardOnChain,
     nudgeComputer: () => runBot(true),
     computerStuck,
+    settleStuck,
+    nudgeSettle: () => {
+      settleKickKey.current = "";
+      settleKickAt.current = 0;
+      return settleMarket();
+    },
     goMarket,
     peekHand,
     opponentCount: seat === 0 ? (table?.hand1 ?? 0) : seat === 1 ? (table?.hand0 ?? 0) : 0,

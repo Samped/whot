@@ -25,13 +25,22 @@ function toSigs(sigs: readonly (Hex | Uint8Array)[]): Hex[] {
   return sigs.map((sig) => (typeof sig === "string" ? sig : toHex(sig)));
 }
 
+type RevealRow = {
+  handle: Hex;
+  plaintext: { value: unknown };
+  covalidatorSignatures: readonly (Hex | Uint8Array)[];
+};
+
 async function revealHand(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   zap: any,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   publicClient: any,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  wallet: any,
   id: number,
   player: Hex,
+  preferDecrypt: boolean,
 ) {
   const handles = (await publicClient.readContract({
     address: WHOT,
@@ -44,9 +53,27 @@ async function revealHand(
     return { atts: [] as { handle: Hex; value: Hex }[], sigs: [] as Hex[][], sum: 0 };
   }
 
-  const revealed = (await zap.attestedReveal(handles, {
-    backoffConfig: { maxRetries: 36, baseDelayInMs: 280, backoffFactor: 1.18 },
-  })) as { handle: Hex; plaintext: { value: unknown }; covalidatorSignatures: readonly (Hex | Uint8Array)[] }[];
+  let revealed: RevealRow[];
+  try {
+    if (preferDecrypt) {
+      revealed = (await zap.attestedDecrypt(wallet, handles, {
+        backoffConfig: { maxRetries: 8, baseDelayInMs: 100, backoffFactor: 1.15 },
+      })) as RevealRow[];
+    } else {
+      revealed = (await zap.attestedReveal(handles, {
+        backoffConfig: { maxRetries: 12, baseDelayInMs: 120, backoffFactor: 1.15 },
+      })) as RevealRow[];
+    }
+  } catch {
+    // Fall back the other way — public reveal after market count, or house decrypt for the bot.
+    revealed = preferDecrypt
+      ? ((await zap.attestedReveal(handles, {
+          backoffConfig: { maxRetries: 12, baseDelayInMs: 120, backoffFactor: 1.15 },
+        })) as RevealRow[])
+      : ((await zap.attestedDecrypt(wallet, handles, {
+          backoffConfig: { maxRetries: 8, baseDelayInMs: 100, backoffFactor: 1.15 },
+        })) as RevealRow[]);
+  }
 
   let sum = 0;
   const atts: { handle: Hex; value: Hex }[] = [];
@@ -54,9 +81,7 @@ async function revealHand(
   for (let i = 0; i < handles.length; i++) {
     const row = revealed[i]!;
     const idx = Number(
-      typeof row.plaintext.value === "bigint"
-        ? row.plaintext.value
-        : row.plaintext.value,
+      typeof row.plaintext.value === "bigint" ? row.plaintext.value : row.plaintext.value,
     );
     sum += decodeIndex(idx).rank;
     atts.push({ handle: handles[i]!, value: packValue(row.plaintext.value) });
@@ -85,7 +110,8 @@ export async function POST(req: Request) {
   }
 
   busy.add(id);
-  const { publicClient } = houseClients()!;
+  const clients = houseClients()!;
+  const { publicClient, wallet } = clients;
 
   try {
     const raw = await publicClient.readContract({
@@ -111,17 +137,25 @@ export async function POST(req: Request) {
     }
 
     const zap = await Lightning.baseSepoliaTestnet({ hostChainRpcUrls: [houseRpcUrl()] });
-    const hand0 = await revealHand(zap, publicClient, id, table.p0 as Hex);
-    const hand1 = await revealHand(zap, publicClient, id, table.p1 as Hex);
+    // Solo bot hand is allowed to the house; player hand was public-revealed at market end.
+    const botSeat = table.solo;
+    const [hand0, hand1] = await Promise.all([
+      revealHand(zap, publicClient, wallet, id, table.p0 as Hex, false),
+      revealHand(zap, publicClient, wallet, id, table.p1 as Hex, botSeat),
+    ]);
 
     const data = encodeFunctionData({
       abi: whotAbi,
       functionName: "settleMarket",
       args: [BigInt(id), hand0.atts, hand0.sigs, hand1.atts, hand1.sigs],
     });
-    const gas = BigInt(900_000 + (hand0.atts.length + hand1.atts.length) * 220_000);
+    const gas = BigInt(1_200_000 + (hand0.atts.length + hand1.atts.length) * 250_000);
     const hash = await houseSend(WHOT, data, undefined, gas);
-    const receipt = await publicClient.waitForTransactionReceipt({ hash, timeout: 120_000 });
+    const receipt = await publicClient.waitForTransactionReceipt({
+      hash,
+      timeout: 45_000,
+      pollingInterval: 400,
+    });
     if (receipt.status === "reverted") {
       return NextResponse.json({ error: "Market settle reverted." }, { status: 500 });
     }
@@ -135,6 +169,7 @@ export async function POST(req: Request) {
     const message = err instanceof Error ? err.message : "Settle failed.";
     console.error("[settle]", id, message);
     if (/already known|nonce|WrongPhase|already/i.test(message)) {
+      // May already be settling / settled — client should poll table phase.
       return NextResponse.json({ ok: true, pending: true });
     }
     return NextResponse.json({ error: message.slice(0, 180) }, { status: 500 });
