@@ -41,6 +41,14 @@ export function friendlyError(err: unknown): string {
     return named[0];
   }
 
+  if (/house is topping up|coinbase faucet/i.test(raw)) {
+    return "House is topping up from the test faucet. Wait a few seconds, then start again.";
+  }
+
+  if (/house bankroll is empty/i.test(raw)) {
+    return "House bankroll is empty. Fund the house wallet with Base Sepolia ETH, or add CDP_API_KEY_ID + CDP_API_KEY_SECRET so it can refill itself.";
+  }
+
   if (/gas limit too high/i.test(raw)) {
     return "That move asked for too much gas. Tap again.";
   }

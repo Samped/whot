@@ -18,6 +18,8 @@ When the market runs out, the ranks on every remaining card are added up — **l
 
 Tap your email / account chip for the **dashboard** (nickname, avatar, wins/losses, invites). Link an email there so ranked invites can also land in your inbox (needs `RESEND_API_KEY`).
 
+The house wallet tops up new table accounts. Set `CDP_API_KEY_ID` + `CDP_API_KEY_SECRET` (Coinbase secret API key, not the public project id) so it auto-refills from the Base Sepolia faucet when low.
+
 ## Layout
 
 ```
@@ -30,7 +32,7 @@ Tap your email / account chip for the **dashboard** (nickname, avatar, wins/loss
 ```bash
 npm install
 cp frontend/.env.example frontend/.env
-# set NEXT_PUBLIC_WHOT_ADDRESS (and optional RESEND_API_KEY) after deploy
+# set NEXT_PUBLIC_WHOT_ADDRESS, optional RESEND_API_KEY, and CDP_API_KEY_ID / CDP_API_KEY_SECRET to auto-refill the house
 
 npm run dev
 ```

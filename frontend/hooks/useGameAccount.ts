@@ -159,7 +159,7 @@ export function GameAccountProvider({ children }: { children: ReactNode }) {
   }, [walletOn, walletAddress, disconnect]);
 
   const ensureReady = useCallback(
-    async (minBalance = 4_000_000_000_000_000n): Promise<PlaySession> => {
+    async (minBalance = 900_000_000_000_000n): Promise<PlaySession> => {
       const walletSigned = Boolean(walletOn && walletAddress);
       const mailSigned = Boolean(agent?.email && emailSessionLive());
       if (!walletSigned && !mailSigned) {
