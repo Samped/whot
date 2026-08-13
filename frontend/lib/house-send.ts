@@ -55,7 +55,9 @@ function sleep(ms: number) {
   return new Promise((r) => setTimeout(r, ms));
 }
 
-async function feeCaps(publicClient: ReturnType<typeof createPublicClient>) {
+type HousePublicClient = NonNullable<ReturnType<typeof houseClients>>["publicClient"];
+
+async function feeCaps(publicClient: HousePublicClient) {
   try {
     const fees = await publicClient.estimateFeesPerGas();
     const tip = fees.maxPriorityFeePerGas ?? FEE_FLOOR.maxPriorityFeePerGas;
