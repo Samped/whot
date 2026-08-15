@@ -156,13 +156,11 @@ export function useLeaderboard() {
         mode === "email" &&
         myEmail &&
         (linked.has(row.address.toLowerCase()) ||
-          profile?.email?.trim().toLowerCase() === myEmail ||
-          // Merge every seat that shares this browser email identity.
-          (emailNick && linked.size > 0 && linked.has(row.address.toLowerCase())))
+          (address && row.address.toLowerCase() === address.toLowerCase()) ||
+          profile?.email?.trim().toLowerCase() === myEmail)
       ) {
         key = `mail:${myEmail}`;
       }
-      // Also merge ladder seats whose profile email matches, even with empty linked set.
       if (mode === "email" && myEmail && profile?.email?.trim().toLowerCase() === myEmail) {
         key = `mail:${myEmail}`;
       }
@@ -214,7 +212,7 @@ export function useLeaderboard() {
     }));
     list.sort((a, b) => b.wins - a.wins || b.rate - a.rate || b.played - a.played);
     return list;
-  }, [rawRows, profiles, mode, myEmail, linked, emailNick]);
+  }, [rawRows, profiles, mode, myEmail, linked, emailNick, address]);
 
   const mine = useMemo(() => {
     if (mode === "email" && myEmail) {
