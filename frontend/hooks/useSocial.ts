@@ -6,7 +6,8 @@ import { encodeFunctionData, type Address, type Hex } from "viem";
 import { toast } from "sonner";
 import { socialAbi } from "@/abi/social";
 import { useGameAccount } from "@/hooks/useGameAccount";
-import { publicRpc, findTableAccountsForEmail, readEmailIdentity, walletFor, writeEmailIdentity } from "@/lib/game-account";
+import { publicRpc, readEmailIdentity, walletFor, writeEmailIdentity } from "@/lib/game-account";
+import { discoverProfileForEmail, rememberDiscoveredProfile } from "@/lib/email-profile";
 import { activeChain } from "@/lib/network";
 import {
   displayName,
@@ -204,10 +205,18 @@ export function useSocial() {
     [address, account, profileQuery, invitesQuery],
   );
 
-  // Copy nickname from any linked/old seat onto this address when missing.
+  // Copy nickname from any seat (including old ranked seats) onto this address.
   useEffect(() => {
     if (!signedIn || !address || !account?.email || !enabled) return;
-    if (onChainProfile.set && onChainProfile.nickname) return;
+    if (onChainProfile.set && onChainProfile.nickname) {
+      // Keep the email identity cache warm when the current seat already has a name.
+      writeEmailIdentity(account.email, {
+        tableAddress: address,
+        nickname: onChainProfile.nickname,
+        avatar: onChainProfile.avatar,
+      });
+      return;
+    }
     if (restoredProfile.current) return;
     if (profileQuery.isLoading) return;
 
@@ -216,62 +225,28 @@ export function useSocial() {
 
     void (async () => {
       try {
-        const cached = readEmailIdentity(email);
-        const candidates = new Set<string>();
-        candidates.add(address.toLowerCase());
-        if (cached?.tableAddress) candidates.add(cached.tableAddress.toLowerCase());
-        for (const a of cached?.linkedAddresses || []) candidates.add(a.toLowerCase());
-        for (const rec of findTableAccountsForEmail(email)) {
-          candidates.add(rec.address.toLowerCase());
-        }
-
-        const addrs = [...candidates] as Address[];
-        let source: PlayerProfile | null = null;
-
-        if (addrs.length > 0) {
-          const rows = (await publicRpc().readContract({
-            address: SOCIAL_ADDRESS,
-            abi: socialAbi,
-            functionName: "profilesOf",
-            args: [addrs],
-          })) as unknown[];
-          for (let i = 0; i < addrs.length; i++) {
-            const p = parseProfile(rows[i]);
-            if (!p.set || !p.nickname) continue;
-            const sameMail = (p.email || "").trim().toLowerCase() === email;
-            if (sameMail || !source) source = p;
-            if (sameMail) break;
-          }
-        }
-
-        if (!source?.nickname && cached?.nickname) {
-          source = {
-            nickname: cached.nickname,
-            avatar: Number(cached.avatar || 0),
-            email,
-            set: true,
-          };
-        }
-
+        const source = await discoverProfileForEmail(email);
         if (!source?.nickname) {
           restoredProfile.current = false;
           return;
         }
 
         setBorrowedProfile(source);
-        writeEmailIdentity(email, {
-          tableAddress: address,
-          nickname: source.nickname,
-          avatar: source.avatar,
-          linkedAddresses: addrs,
-        });
+        rememberDiscoveredProfile(email, address, source);
 
-        // Persist onto the current seat so ranked + invites see the same name.
-        await sendTx("setProfile", [
-          source.nickname.slice(0, 20),
-          Number(source.avatar || 0),
-          email,
-        ]);
+        // Persist onto the current seat so ranked + header stay in sync.
+        try {
+          // Top up the seat if needed so setProfile can land.
+          await game.ensureReady(200_000_000_000_000n);
+          await sendTx("setProfile", [
+            source.nickname.slice(0, 20),
+            Number(source.avatar || 0),
+            email,
+          ]);
+        } catch {
+          // Still show the borrowed name even if the write needs a later retry.
+          restoredProfile.current = false;
+        }
       } catch {
         restoredProfile.current = false;
       }
@@ -283,8 +258,10 @@ export function useSocial() {
     enabled,
     onChainProfile.set,
     onChainProfile.nickname,
+    onChainProfile.avatar,
     profileQuery.isLoading,
     sendTx,
+    game,
   ]);
 
   const saveProfile = useCallback(

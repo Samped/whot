@@ -2,13 +2,14 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useGameAccount } from "@/hooks/useGameAccount";
 import { useSocialApi } from "@/hooks/SocialProvider";
 import { LoginSheet } from "@/components/LoginSheet";
 import { WhotBack, ShapeGlyph } from "@/components/WhotCard";
 import { AVATARS } from "@/lib/social";
 import { readEmailIdentity } from "@/lib/game-account";
+import { discoverProfileForEmail } from "@/lib/email-profile";
 
 function Nav() {
   const params = useSearchParams();
@@ -42,18 +43,42 @@ function AccountChip() {
   const router = useRouter();
   const { account, mode, walletAddress, address, signOut, funding, signedIn } = useGameAccount();
   const social = useSocialApi();
-  const cached = mode === "email" && account?.email ? readEmailIdentity(account.email) : null;
-  const avatar = social.profile.set ? social.profile.avatar : Number(cached?.avatar || 0);
+  const [foundNick, setFoundNick] = useState("");
+  const [foundAvatar, setFoundAvatar] = useState(0);
+
+  useEffect(() => {
+    if (mode !== "email" || !account?.email) {
+      setFoundNick("");
+      setFoundAvatar(0);
+      return;
+    }
+    if (social.profile.nickname) {
+      setFoundNick(social.profile.nickname);
+      setFoundAvatar(social.profile.avatar);
+      return;
+    }
+    const cached = readEmailIdentity(account.email);
+    if (cached?.nickname) {
+      setFoundNick(cached.nickname);
+      setFoundAvatar(Number(cached.avatar || 0));
+    }
+    let stop = false;
+    void discoverProfileForEmail(account.email).then((p) => {
+      if (stop || !p?.nickname) return;
+      setFoundNick(p.nickname);
+      setFoundAvatar(p.avatar);
+    });
+    return () => {
+      stop = true;
+    };
+  }, [mode, account?.email, social.profile.nickname, social.profile.avatar]);
+
+  const avatar = social.profile.nickname ? social.profile.avatar : foundAvatar;
   const label =
-    social.profile.set && social.profile.nickname
-      ? social.profile.nickname
-      : cached?.nickname
-        ? cached.nickname
-        : mode === "email" && account?.email
-          ? account.email
-          : walletAddress
-            ? shortAddr(walletAddress)
-            : "";
+    social.profile.nickname ||
+    foundNick ||
+    (mode === "email" && account?.email ? account.email : "") ||
+    (walletAddress ? shortAddr(walletAddress) : "");
 
   return (
     <div className="account-bar">

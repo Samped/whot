@@ -7,6 +7,7 @@ import { useSocialApi } from "@/hooks/SocialProvider";
 import { useLeaderboard } from "@/hooks/useLeaderboard";
 import { AVATARS } from "@/lib/social";
 import { readEmailIdentity } from "@/lib/game-account";
+import { discoverProfileForEmail } from "@/lib/email-profile";
 import { tableCode, tableHref } from "@/lib/table-code";
 import { ShapeGlyph } from "@/components/WhotCard";
 
@@ -20,16 +21,34 @@ export function ProfileDash({ onHome }: { onHome: () => void }) {
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    if (!social.profile.set) {
-      const cached = account?.email ? readEmailIdentity(account.email) : null;
-      setNickname(cached?.nickname || account?.email?.split("@")[0] || "");
-      setAvatar(Number(cached?.avatar || 0));
-      setEmail(account?.email || "");
+    const mail = account?.email || social.profile.email || "";
+    setEmail(mail);
+
+    if (social.profile.nickname) {
+      setNickname(social.profile.nickname);
+      setAvatar(social.profile.avatar);
       return;
     }
-    setNickname(social.profile.nickname);
-    setAvatar(social.profile.avatar);
-    setEmail(social.profile.email || account?.email || "");
+
+    const cached = mail ? readEmailIdentity(mail) : null;
+    if (cached?.nickname) {
+      setNickname(cached.nickname);
+      setAvatar(Number(cached.avatar || 0));
+    } else {
+      setNickname(mail.split("@")[0] || "");
+      setAvatar(0);
+    }
+
+    if (!mail) return;
+    let stop = false;
+    void discoverProfileForEmail(mail).then((p) => {
+      if (stop || !p?.nickname) return;
+      setNickname(p.nickname);
+      setAvatar(p.avatar);
+    });
+    return () => {
+      stop = true;
+    };
   }, [social.profile, account?.email]);
 
   if (!signedIn) {
@@ -75,7 +94,7 @@ export function ProfileDash({ onHome }: { onHome: () => void }) {
         </div>
         <div>
           <p className="eyebrow">Your table seat</p>
-          <h3>{social.profile.set || social.profile.nickname ? social.profile.nickname : "Set a nickname"}</h3>
+          <h3>{social.profile.nickname || nickname || "Set a nickname"}</h3>
           <p className="profile-meta">
             {mode === "email" && account?.email ? account.email : "Wallet"} ·{" "}
             {address ? `${address.slice(0, 6)}…${address.slice(-4)}` : "—"}

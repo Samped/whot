@@ -8,6 +8,7 @@ import { socialAbi } from "@/abi/social";
 import { WHOT_ADDRESS } from "@/lib/addresses";
 import { useGameAccount } from "@/hooks/useGameAccount";
 import { publicRpc, readEmailIdentity } from "@/lib/game-account";
+import { discoverProfileForEmail } from "@/lib/email-profile";
 import { parseProfile, SOCIAL_ADDRESS, type PlayerProfile } from "@/lib/social";
 
 export type LadderRow = {
@@ -74,6 +75,7 @@ export function useLeaderboard() {
   }, [ladderQuery.data]);
 
   const [profiles, setProfiles] = useState<Record<string, PlayerProfile>>({});
+  const [emailNick, setEmailNick] = useState<string>("");
 
   useEffect(() => {
     if (!SOCIAL_ADDRESS) return;
@@ -106,6 +108,20 @@ export function useLeaderboard() {
     };
   }, [rawRows, linked]);
 
+  useEffect(() => {
+    if (mode !== "email" || !myEmail) {
+      setEmailNick("");
+      return;
+    }
+    let stop = false;
+    void discoverProfileForEmail(myEmail).then((p) => {
+      if (!stop && p?.nickname) setEmailNick(p.nickname);
+    });
+    return () => {
+      stop = true;
+    };
+  }, [mode, myEmail, rawRows.length]);
+
   const rows = useMemo<LadderRow[]>(() => {
     const groups = new Map<
       string,
@@ -123,6 +139,7 @@ export function useLeaderboard() {
     const nicknameForEmail = (mail: string) => {
       const want = mail.trim().toLowerCase();
       if (!want) return undefined;
+      if (want === myEmail && emailNick) return emailNick;
       for (const [addr, p] of Object.entries(profiles)) {
         if (!p.set || !p.nickname) continue;
         if ((p.email || "").trim().toLowerCase() === want) return p.nickname;
@@ -138,8 +155,15 @@ export function useLeaderboard() {
       if (
         mode === "email" &&
         myEmail &&
-        (linked.has(row.address.toLowerCase()) || profile?.email?.trim().toLowerCase() === myEmail)
+        (linked.has(row.address.toLowerCase()) ||
+          profile?.email?.trim().toLowerCase() === myEmail ||
+          // Merge every seat that shares this browser email identity.
+          (emailNick && linked.size > 0 && linked.has(row.address.toLowerCase())))
       ) {
+        key = `mail:${myEmail}`;
+      }
+      // Also merge ladder seats whose profile email matches, even with empty linked set.
+      if (mode === "email" && myEmail && profile?.email?.trim().toLowerCase() === myEmail) {
         key = `mail:${myEmail}`;
       }
 
@@ -172,11 +196,10 @@ export function useLeaderboard() {
       if (!prev.email && profile?.email) prev.email = profile.email;
     }
 
-    // Ensure the signed-in email group has a nickname even if only linked seats hold it.
     if (mode === "email" && myEmail) {
       const key = `mail:${myEmail}`;
       const g = groups.get(key);
-      if (g && !g.nickname) g.nickname = nicknameForEmail(myEmail);
+      if (g && !g.nickname) g.nickname = nicknameForEmail(myEmail) || emailNick || undefined;
     }
 
     const list: LadderRow[] = [...groups.entries()].map(([id, g]) => ({
@@ -191,7 +214,7 @@ export function useLeaderboard() {
     }));
     list.sort((a, b) => b.wins - a.wins || b.rate - a.rate || b.played - a.played);
     return list;
-  }, [rawRows, profiles, mode, myEmail, linked]);
+  }, [rawRows, profiles, mode, myEmail, linked, emailNick]);
 
   const mine = useMemo(() => {
     if (mode === "email" && myEmail) {
