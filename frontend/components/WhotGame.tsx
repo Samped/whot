@@ -300,10 +300,10 @@ function Home({ onBoard }: { onBoard: () => void }) {
         )}
         <ol className="ladder">
           {board.rows.slice(0, 5).map((row, i) => (
-            <li key={row.address}>
+            <li key={row.identity || row.address}>
               <span className="pos">{i + 1}</span>
               <span className="who">
-                {displayName(names[row.address.toLowerCase()], row.address)}
+                {row.nickname || displayName(names[row.address.toLowerCase()], row.address)}
               </span>
               <span className="wl">
                 {row.wins}W · {row.losses}L
@@ -784,7 +784,7 @@ function BoardScreen({ onHome }: { onHome: () => void }) {
   const board = useLeaderboard();
   const social = useSocialApi();
   const game = useWhot(0);
-  const { address, signedIn, requestLogin } = useGameAccount();
+  const { address, signedIn, requestLogin, account, mode } = useGameAccount();
   const [names, setNames] = useState<Record<string, PlayerProfile>>({});
   const [inviting, setInviting] = useState<string | null>(null);
 
@@ -848,13 +848,17 @@ function BoardScreen({ onHome }: { onHome: () => void }) {
       <ol className="ladder ladder-invite">
         {board.rows.map((row, i) => {
           const profile = names[row.address.toLowerCase()];
-          const mine = address && row.address.toLowerCase() === address.toLowerCase();
+          const mine =
+            (mode === "email" && account?.email && row.identity === `mail:${account.email.trim().toLowerCase()}`) ||
+            (address && row.address.toLowerCase() === address.toLowerCase());
           return (
-            <li key={row.address} className={i < 3 ? "podium" : ""}>
+            <li key={row.identity || row.address} className={i < 3 ? "podium" : ""}>
               <span className="pos">{i + 1}</span>
               <span className="who">
-                <span className="who-name">{displayName(profile, row.address)}</span>
-                {profile?.set ? (
+                <span className="who-name">
+                  {row.nickname || displayName(profile, row.address)}
+                </span>
+                {row.nickname || profile?.set ? (
                   <span className="who-sub">{short(row.address)}</span>
                 ) : null}
               </span>

@@ -95,7 +95,7 @@ export function LoginSheet() {
         evmAddress?: string;
       };
       if (!res.ok) throw new Error(body.error || "That code did not work.");
-      signInWithEmail(email, body.evmAddress);
+      await signInWithEmail(email, body.evmAddress);
       close();
     } catch (err) {
       setError(err instanceof Error ? err.message : "That code did not work.");

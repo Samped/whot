@@ -1,5 +1,7 @@
 import { createPublicClient, createWalletClient, http, type Address, type Hex } from "viem";
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
+import { whotAbi } from "@/abi/whot";
+import { WHOT_ADDRESS } from "@/lib/addresses";
 import { activeChain, hostRpcUrl } from "@/lib/network";
 
 const STORAGE_KEY = "whot.tableAccount.v1";
@@ -19,10 +21,14 @@ export type TableAccount = {
 
 export type EmailIdentity = {
   tableAddress: Address;
+  /** Every table seat ever linked to this email (for merged rank). */
+  linkedAddresses?: Address[];
   nickname?: string;
   avatar?: number;
   updatedAt: number;
 };
+
+export type SeatStats = { wins: number; losses: number; played: number };
 
 export function mailOwnerKey(email: string) {
   return `mail:${email.trim().toLowerCase()}`;
@@ -80,10 +86,18 @@ export function writeEmailIdentity(
   const key = email.trim().toLowerCase();
   if (!key) return;
   const map = readIdentityMap();
+  const prev = map[key];
+  const linked = new Set<string>();
+  for (const a of prev?.linkedAddresses || []) linked.add(a.toLowerCase());
+  for (const a of patch.linkedAddresses || []) linked.add(a.toLowerCase());
+  linked.add(patch.tableAddress.toLowerCase());
+  if (prev?.tableAddress) linked.add(prev.tableAddress.toLowerCase());
+
   map[key] = {
-    ...map[key],
+    ...prev,
     ...patch,
     tableAddress: patch.tableAddress,
+    linkedAddresses: [...linked] as Address[],
     updatedAt: Date.now(),
   };
   window.localStorage.setItem(EMAIL_IDENTITY, JSON.stringify(map));
@@ -102,67 +116,139 @@ export function loadTableAccount(owner?: string): TableAccount | null {
   }
 }
 
-/** Find any locally stored table seat that already belongs to this email. */
-export function findTableAccountByEmail(email: string): TableAccount | null {
-  if (typeof window === "undefined") return null;
-  const want = email.trim().toLowerCase();
-  if (!want) return null;
-
-  let best: TableAccount | null = null;
+/** Every locally stored table seat (any owner key). */
+export function listAllTableAccounts(): TableAccount[] {
+  if (typeof window === "undefined") return [];
+  const out: TableAccount[] = [];
+  const seen = new Set<string>();
   for (let i = 0; i < window.localStorage.length; i++) {
     const key = window.localStorage.key(i);
     if (!key || !key.startsWith(STORAGE_KEY)) continue;
     try {
       const parsed = JSON.parse(window.localStorage.getItem(key) || "") as TableAccount;
       if (!parsed?.address || !parsed?.privateKey) continue;
-      if ((parsed.email || "").trim().toLowerCase() !== want) continue;
-      if (!best || (parsed.createdAt || 0) < (best.createdAt || 0)) best = parsed;
+      const id = parsed.address.toLowerCase();
+      if (seen.has(id)) continue;
+      seen.add(id);
+      out.push(parsed);
     } catch {
       /* skip */
     }
   }
-  return best;
+  return out;
+}
+
+export function findTableAccountsForEmail(email: string): TableAccount[] {
+  const want = email.trim().toLowerCase();
+  if (!want) return [];
+  const identity = readEmailIdentity(want);
+  const linked = new Set((identity?.linkedAddresses || []).map((a) => a.toLowerCase()));
+  if (identity?.tableAddress) linked.add(identity.tableAddress.toLowerCase());
+
+  return listAllTableAccounts().filter((rec) => {
+    const mail = (rec.email || "").trim().toLowerCase();
+    if (mail === want) return true;
+    if (linked.has(rec.address.toLowerCase())) return true;
+    return false;
+  });
+}
+
+async function readSeatStats(address: Address): Promise<SeatStats> {
+  if (!WHOT_ADDRESS) return { wins: 0, losses: 0, played: 0 };
+  try {
+    const raw = (await publicRpc().readContract({
+      address: WHOT_ADDRESS,
+      abi: whotAbi,
+      functionName: "stats",
+      args: [address],
+    })) as readonly [number | bigint, number | bigint, number | bigint];
+    return {
+      wins: Number(raw[0] || 0),
+      losses: Number(raw[1] || 0),
+      played: Number(raw[2] || 0),
+    };
+  } catch {
+    return { wins: 0, losses: 0, played: 0 };
+  }
+}
+
+function scoreStats(s: SeatStats) {
+  return s.played * 1_000_000 + s.wins * 1_000 + s.losses;
 }
 
 /**
- * Email seats must stay on one table EOA for life of that email.
- * CDP embedded addresses can rotate — never use them as the storage key.
+ * Pick the local private key whose on-chain seat has the most history.
+ * Never invent a new seat when an older email seat still has wins.
  */
-export function resolveEmailTableAccount(email: string, cdpAddress?: string): TableAccount {
+export async function resolveEmailTableAccount(
+  email: string,
+  cdpAddress?: string,
+): Promise<TableAccount> {
   const trimmed = email.trim().toLowerCase();
   const owner = mailOwnerKey(trimmed);
   const cdp = cdpAddress?.toLowerCase() as Address | undefined;
 
-  const finish = (rec: TableAccount, clearOwner?: string) => {
-    const next: TableAccount = {
-      ...rec,
-      owner,
-      email: trimmed,
-      cdpAddress: cdp || rec.cdpAddress,
-    };
-    saveTableAccount(next);
-    writeEmailIdentity(trimmed, { tableAddress: next.address });
-    if (clearOwner && clearOwner.toLowerCase() !== owner.toLowerCase()) {
-      clearTableAccount(clearOwner);
-    }
-    return next;
+  const byKey = new Map<string, TableAccount>();
+  const add = (rec: TableAccount | null | undefined) => {
+    if (!rec?.address || !rec.privateKey) return;
+    byKey.set(rec.address.toLowerCase(), rec);
   };
 
-  const byEmail = loadTableAccount(owner);
-  if (byEmail) return finish(byEmail);
+  add(loadTableAccount(owner));
+  if (cdp) add(loadTableAccount(cdp));
+  for (const rec of findTableAccountsForEmail(trimmed)) add(rec);
 
-  if (cdp) {
-    const byCdp = loadTableAccount(cdp);
-    if (byCdp) return finish(byCdp, cdp);
+  const candidates = [...byKey.values()];
+  if (candidates.length === 0) {
+    return finish(createTableAccount(owner, trimmed), trimmed, owner, cdp, []);
   }
 
-  const scanned = findTableAccountByEmail(trimmed);
-  if (scanned) {
-    const prevOwner = scanned.owner;
-    return finish(scanned, prevOwner && prevOwner !== owner ? prevOwner : undefined);
-  }
+  const ranked = await Promise.all(
+    candidates.map(async (rec) => ({
+      rec,
+      stats: await readSeatStats(rec.address),
+    })),
+  );
 
-  return finish(createTableAccount(owner, trimmed));
+  ranked.sort((a, b) => {
+    const diff = scoreStats(b.stats) - scoreStats(a.stats);
+    if (diff) return diff;
+    return (a.rec.createdAt || 0) - (b.rec.createdAt || 0);
+  });
+
+  const withHistory = ranked.filter((r) => scoreStats(r.stats) > 0);
+  const keyed = ranked.find((r) => (r.rec.owner || "").toLowerCase() === owner.toLowerCase());
+  const best = (withHistory[0] || keyed || ranked[0]!).rec;
+
+  const linked = ranked.map((r) => r.rec.address);
+  const clearOwners = candidates
+    .map((c) => c.owner)
+    .filter((o): o is string => typeof o === "string" && o.length > 0 && o.toLowerCase() !== owner.toLowerCase());
+
+  return finish(best, trimmed, owner, cdp, linked, clearOwners);
+}
+
+function finish(
+  rec: TableAccount,
+  email: string,
+  owner: string,
+  cdp: Address | undefined,
+  linked: Address[],
+  clearOwners: string[] = [],
+) {
+  const next: TableAccount = {
+    ...rec,
+    owner,
+    email,
+    cdpAddress: cdp || rec.cdpAddress,
+  };
+  saveTableAccount(next);
+  writeEmailIdentity(email, {
+    tableAddress: next.address,
+    linkedAddresses: linked.length ? linked : [next.address],
+  });
+  for (const o of clearOwners) clearTableAccount(o);
+  return next;
 }
 
 export function createTableAccount(owner?: string, email?: string): TableAccount {

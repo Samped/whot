@@ -49,7 +49,7 @@ type GameAccountValue = {
   loginOpen: boolean;
   requestLogin: () => void;
   closeLogin: () => void;
-  signInWithEmail: (email: string, cdpAddress?: string) => TableAccount;
+  signInWithEmail: (email: string, cdpAddress?: string) => Promise<TableAccount>;
   signOut: () => void;
   ensureReady: (minBalance?: bigint) => Promise<PlaySession>;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -106,6 +106,8 @@ export function GameAccountProvider({ children }: { children: ReactNode }) {
   const [loginOpen, setLoginOpen] = useState(false);
 
   useEffect(() => {
+    let cancelled = false;
+
     if (walletOn && walletAddress) {
       clearEmailActive();
       const rec = loadTableAccount(walletAddress);
@@ -118,18 +120,32 @@ export function GameAccountProvider({ children }: { children: ReactNode }) {
     if (emailSessionLive()) {
       const mail = readMailSession();
       if (mail?.email) {
-        // Prefer email-stable seat; migrate any CDP-keyed leftovers.
-        const rec = resolveEmailTableAccount(mail.email, mail.owner.startsWith("mail:") ? undefined : mail.owner);
-        saveMailSession(mailOwnerKey(mail.email), mail.email);
-        setAgent(rec);
-        setReady(true);
-        return;
+        setReady(false);
+        void (async () => {
+          try {
+            const rec = await resolveEmailTableAccount(
+              mail.email,
+              mail.owner.startsWith("mail:") ? undefined : mail.owner,
+            );
+            if (cancelled) return;
+            saveMailSession(mailOwnerKey(mail.email), mail.email);
+            setAgent(rec);
+          } finally {
+            if (!cancelled) setReady(true);
+          }
+        })();
+        return () => {
+          cancelled = true;
+        };
       }
     }
 
     clearEmailActive();
     setAgent(null);
     setReady(true);
+    return () => {
+      cancelled = true;
+    };
   }, [walletOn, walletAddress]);
 
   const signedIn = Boolean((walletOn && walletAddress) || (agent?.email && emailSessionLive()));
@@ -138,10 +154,10 @@ export function GameAccountProvider({ children }: { children: ReactNode }) {
   const requestLogin = useCallback(() => setLoginOpen(true), []);
   const closeLogin = useCallback(() => setLoginOpen(false), []);
 
-  const signInWithEmail = useCallback((email: string, cdpAddress?: string) => {
+  const signInWithEmail = useCallback(async (email: string, cdpAddress?: string) => {
     const trimmed = email.trim().toLowerCase();
-    // CDP embedded wallet addresses can rotate. Always pin the table seat to the email.
-    const next = resolveEmailTableAccount(trimmed, cdpAddress);
+    // CDP addresses rotate — pick the local seat with the most on-chain history for this email.
+    const next = await resolveEmailTableAccount(trimmed, cdpAddress);
     saveMailSession(mailOwnerKey(trimmed), trimmed);
     markEmailActive();
     clearIncoSession();
@@ -187,7 +203,7 @@ export function GameAccountProvider({ children }: { children: ReactNode }) {
             setLoginOpen(true);
             throw new Error("Sign in with email or a wallet first.");
           }
-          rec = resolveEmailTableAccount(
+          rec = await resolveEmailTableAccount(
             mail.email,
             mail.owner.startsWith("mail:") ? undefined : mail.owner,
           );
