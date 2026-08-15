@@ -6,7 +6,7 @@ import { encodeFunctionData, type Address, type Hex } from "viem";
 import { toast } from "sonner";
 import { socialAbi } from "@/abi/social";
 import { useGameAccount } from "@/hooks/useGameAccount";
-import { publicRpc, walletFor } from "@/lib/game-account";
+import { publicRpc, readEmailIdentity, walletFor, writeEmailIdentity } from "@/lib/game-account";
 import { activeChain } from "@/lib/network";
 import {
   displayName,
@@ -66,6 +66,12 @@ export function useSocial() {
     () => (profileQuery.data ? parseProfile(profileQuery.data) : emptyProfile()),
     [profileQuery.data],
   );
+
+  const restoredProfile = useRef(false);
+
+  useEffect(() => {
+    restoredProfile.current = false;
+  }, [address, account?.email]);
 
   const invites = useMemo<OpenInvite[]>(() => {
     const raw = invitesQuery.data as
@@ -173,13 +179,57 @@ export function useSocial() {
     [address, account, profileQuery, invitesQuery],
   );
 
+  // If this table seat has no on-chain profile, re-apply the nickname cached
+  // for this email so a CDP address rotation still looks like the same player.
+  useEffect(() => {
+    if (!signedIn || !address || !account?.email || !enabled) return;
+    if (profile.set || restoredProfile.current) return;
+    if (profileQuery.isLoading || profileQuery.isFetching) return;
+    const cached = readEmailIdentity(account.email);
+    if (!cached?.nickname) return;
+    restoredProfile.current = true;
+    void (async () => {
+      try {
+        await sendTx("setProfile", [
+          cached.nickname!.slice(0, 20),
+          Number(cached.avatar || 0),
+          account.email!.trim().toLowerCase(),
+        ]);
+        writeEmailIdentity(account.email!, {
+          tableAddress: address,
+          nickname: cached.nickname,
+          avatar: cached.avatar || 0,
+        });
+      } catch {
+        restoredProfile.current = false;
+      }
+    })();
+  }, [
+    signedIn,
+    address,
+    account?.email,
+    enabled,
+    profile.set,
+    profileQuery.isLoading,
+    profileQuery.isFetching,
+    sendTx,
+  ]);
+
   const saveProfile = useCallback(
     async (next: { nickname: string; avatar: number; email: string }) => {
       const nickname = next.nickname.trim().slice(0, 20);
       if (!nickname) throw new Error("Pick a nickname.");
-      await sendTx("setProfile", [nickname, next.avatar, next.email.trim().toLowerCase()]);
+      const email = next.email.trim().toLowerCase();
+      await sendTx("setProfile", [nickname, next.avatar, email]);
+      if (address && email) {
+        writeEmailIdentity(email, {
+          tableAddress: address,
+          nickname,
+          avatar: next.avatar,
+        });
+      }
     },
-    [sendTx],
+    [sendTx, address],
   );
 
   const sendInvite = useCallback(

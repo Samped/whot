@@ -8,6 +8,7 @@ import { useSocialApi } from "@/hooks/SocialProvider";
 import { LoginSheet } from "@/components/LoginSheet";
 import { WhotBack, ShapeGlyph } from "@/components/WhotCard";
 import { AVATARS } from "@/lib/social";
+import { readEmailIdentity } from "@/lib/game-account";
 
 function Nav() {
   const params = useSearchParams();
@@ -41,15 +42,18 @@ function AccountChip() {
   const router = useRouter();
   const { account, mode, walletAddress, address, signOut, funding, signedIn } = useGameAccount();
   const social = useSocialApi();
-  const avatar = social.profile.set ? social.profile.avatar : 0;
+  const cached = mode === "email" && account?.email ? readEmailIdentity(account.email) : null;
+  const avatar = social.profile.set ? social.profile.avatar : Number(cached?.avatar || 0);
   const label =
     social.profile.set && social.profile.nickname
       ? social.profile.nickname
-      : mode === "email" && account?.email
-        ? account.email
-        : walletAddress
-          ? shortAddr(walletAddress)
-          : "";
+      : cached?.nickname
+        ? cached.nickname
+        : mode === "email" && account?.email
+          ? account.email
+          : walletAddress
+            ? shortAddr(walletAddress)
+            : "";
 
   return (
     <div className="account-bar">

@@ -4,13 +4,24 @@ import { activeChain, hostRpcUrl } from "@/lib/network";
 
 const STORAGE_KEY = "whot.tableAccount.v1";
 const MAIL_SESSION = "whot.mailSession.v1";
+const EMAIL_IDENTITY = "whot.emailIdentity.v1";
 
 export type TableAccount = {
   address: Address;
   privateKey: Hex;
   createdAt: number;
+  /** Storage owner — always `mail:<email>` for email seats. */
   owner?: string;
   email?: string;
+  /** Latest CDP embedded-wallet address (auth only; may rotate). */
+  cdpAddress?: string;
+};
+
+export type EmailIdentity = {
+  tableAddress: Address;
+  nickname?: string;
+  avatar?: number;
+  updatedAt: number;
 };
 
 export function mailOwnerKey(email: string) {
@@ -44,6 +55,40 @@ export function readMailSession(): { owner: string; email: string } | null {
   }
 }
 
+function readIdentityMap(): Record<string, EmailIdentity> {
+  if (typeof window === "undefined") return {};
+  try {
+    const raw = window.localStorage.getItem(EMAIL_IDENTITY);
+    if (!raw) return {};
+    return JSON.parse(raw) as Record<string, EmailIdentity>;
+  } catch {
+    return {};
+  }
+}
+
+export function readEmailIdentity(email: string): EmailIdentity | null {
+  const key = email.trim().toLowerCase();
+  if (!key) return null;
+  return readIdentityMap()[key] || null;
+}
+
+export function writeEmailIdentity(
+  email: string,
+  patch: Partial<EmailIdentity> & { tableAddress: Address },
+) {
+  if (typeof window === "undefined") return;
+  const key = email.trim().toLowerCase();
+  if (!key) return;
+  const map = readIdentityMap();
+  map[key] = {
+    ...map[key],
+    ...patch,
+    tableAddress: patch.tableAddress,
+    updatedAt: Date.now(),
+  };
+  window.localStorage.setItem(EMAIL_IDENTITY, JSON.stringify(map));
+}
+
 export function loadTableAccount(owner?: string): TableAccount | null {
   if (typeof window === "undefined") return null;
   try {
@@ -55,6 +100,69 @@ export function loadTableAccount(owner?: string): TableAccount | null {
   } catch {
     return null;
   }
+}
+
+/** Find any locally stored table seat that already belongs to this email. */
+export function findTableAccountByEmail(email: string): TableAccount | null {
+  if (typeof window === "undefined") return null;
+  const want = email.trim().toLowerCase();
+  if (!want) return null;
+
+  let best: TableAccount | null = null;
+  for (let i = 0; i < window.localStorage.length; i++) {
+    const key = window.localStorage.key(i);
+    if (!key || !key.startsWith(STORAGE_KEY)) continue;
+    try {
+      const parsed = JSON.parse(window.localStorage.getItem(key) || "") as TableAccount;
+      if (!parsed?.address || !parsed?.privateKey) continue;
+      if ((parsed.email || "").trim().toLowerCase() !== want) continue;
+      if (!best || (parsed.createdAt || 0) < (best.createdAt || 0)) best = parsed;
+    } catch {
+      /* skip */
+    }
+  }
+  return best;
+}
+
+/**
+ * Email seats must stay on one table EOA for life of that email.
+ * CDP embedded addresses can rotate — never use them as the storage key.
+ */
+export function resolveEmailTableAccount(email: string, cdpAddress?: string): TableAccount {
+  const trimmed = email.trim().toLowerCase();
+  const owner = mailOwnerKey(trimmed);
+  const cdp = cdpAddress?.toLowerCase() as Address | undefined;
+
+  const finish = (rec: TableAccount, clearOwner?: string) => {
+    const next: TableAccount = {
+      ...rec,
+      owner,
+      email: trimmed,
+      cdpAddress: cdp || rec.cdpAddress,
+    };
+    saveTableAccount(next);
+    writeEmailIdentity(trimmed, { tableAddress: next.address });
+    if (clearOwner && clearOwner.toLowerCase() !== owner.toLowerCase()) {
+      clearTableAccount(clearOwner);
+    }
+    return next;
+  };
+
+  const byEmail = loadTableAccount(owner);
+  if (byEmail) return finish(byEmail);
+
+  if (cdp) {
+    const byCdp = loadTableAccount(cdp);
+    if (byCdp) return finish(byCdp, cdp);
+  }
+
+  const scanned = findTableAccountByEmail(trimmed);
+  if (scanned) {
+    const prevOwner = scanned.owner;
+    return finish(scanned, prevOwner && prevOwner !== owner ? prevOwner : undefined);
+  }
+
+  return finish(createTableAccount(owner, trimmed));
 }
 
 export function createTableAccount(owner?: string, email?: string): TableAccount {

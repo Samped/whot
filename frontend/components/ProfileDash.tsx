@@ -6,6 +6,7 @@ import { useGameAccount } from "@/hooks/useGameAccount";
 import { useSocialApi } from "@/hooks/SocialProvider";
 import { useLeaderboard } from "@/hooks/useLeaderboard";
 import { AVATARS } from "@/lib/social";
+import { readEmailIdentity } from "@/lib/game-account";
 import { tableCode, tableHref } from "@/lib/table-code";
 import { ShapeGlyph } from "@/components/WhotCard";
 
@@ -20,7 +21,9 @@ export function ProfileDash({ onHome }: { onHome: () => void }) {
 
   useEffect(() => {
     if (!social.profile.set) {
-      setNickname(account?.email?.split("@")[0] || "");
+      const cached = account?.email ? readEmailIdentity(account.email) : null;
+      setNickname(cached?.nickname || account?.email?.split("@")[0] || "");
+      setAvatar(Number(cached?.avatar || 0));
       setEmail(account?.email || "");
       return;
     }
