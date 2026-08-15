@@ -75,7 +75,7 @@ export function ProfileDash({ onHome }: { onHome: () => void }) {
         </div>
         <div>
           <p className="eyebrow">Your table seat</p>
-          <h3>{social.profile.set ? social.profile.nickname : "Set a nickname"}</h3>
+          <h3>{social.profile.set || social.profile.nickname ? social.profile.nickname : "Set a nickname"}</h3>
           <p className="profile-meta">
             {mode === "email" && account?.email ? account.email : "Wallet"} ·{" "}
             {address ? `${address.slice(0, 6)}…${address.slice(-4)}` : "—"}

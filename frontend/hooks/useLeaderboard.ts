@@ -76,20 +76,24 @@ export function useLeaderboard() {
   const [profiles, setProfiles] = useState<Record<string, PlayerProfile>>({});
 
   useEffect(() => {
-    if (!rawRows.length || !SOCIAL_ADDRESS) return;
+    if (!SOCIAL_ADDRESS) return;
+    const addrs = new Set<string>();
+    for (const r of rawRows) addrs.add(r.address.toLowerCase());
+    for (const a of linked) addrs.add(a);
+    if (addrs.size === 0) return;
     let stop = false;
     void (async () => {
       try {
-        const addrs = rawRows.map((r) => r.address);
+        const list = [...addrs] as Address[];
         const rows = (await publicRpc().readContract({
           address: SOCIAL_ADDRESS,
           abi: socialAbi,
           functionName: "profilesOf",
-          args: [addrs],
+          args: [list],
         })) as unknown[];
         if (stop) return;
         const next: Record<string, PlayerProfile> = {};
-        addrs.forEach((addr, i) => {
+        list.forEach((addr, i) => {
           next[addr.toLowerCase()] = parseProfile(rows[i]);
         });
         setProfiles(next);
@@ -100,7 +104,7 @@ export function useLeaderboard() {
     return () => {
       stop = true;
     };
-  }, [rawRows]);
+  }, [rawRows, linked]);
 
   const rows = useMemo<LadderRow[]>(() => {
     const groups = new Map<
@@ -116,9 +120,20 @@ export function useLeaderboard() {
       }
     >();
 
+    const nicknameForEmail = (mail: string) => {
+      const want = mail.trim().toLowerCase();
+      if (!want) return undefined;
+      for (const [addr, p] of Object.entries(profiles)) {
+        if (!p.set || !p.nickname) continue;
+        if ((p.email || "").trim().toLowerCase() === want) return p.nickname;
+        if (linked.has(addr) && want === myEmail) return p.nickname;
+      }
+      const cached = want === myEmail ? readEmailIdentity(want) : null;
+      return cached?.nickname;
+    };
+
     for (const row of rawRows) {
       const profile = profiles[row.address.toLowerCase()];
-      // Merge seats that share an email, and also merge this browser's linked seats.
       let key = identityKey(profile, row.address);
       if (
         mode === "email" &&
@@ -130,13 +145,17 @@ export function useLeaderboard() {
 
       const prev = groups.get(key);
       if (!prev) {
+        const mail = key.startsWith("mail:") ? key.slice(5) : profile?.email;
         groups.set(key, {
           address: row.address,
           wins: row.wins,
           losses: row.losses,
           played: row.played,
-          email: profile?.email || undefined,
-          nickname: profile?.set ? profile.nickname : undefined,
+          email: mail || undefined,
+          nickname:
+            (profile?.set && profile.nickname) ||
+            (mail ? nicknameForEmail(mail) : undefined) ||
+            undefined,
           bestWins: row.wins,
         });
         continue;
@@ -149,7 +168,15 @@ export function useLeaderboard() {
         prev.bestWins = row.wins;
       }
       if (!prev.nickname && profile?.set && profile.nickname) prev.nickname = profile.nickname;
+      if (!prev.nickname && prev.email) prev.nickname = nicknameForEmail(prev.email);
       if (!prev.email && profile?.email) prev.email = profile.email;
+    }
+
+    // Ensure the signed-in email group has a nickname even if only linked seats hold it.
+    if (mode === "email" && myEmail) {
+      const key = `mail:${myEmail}`;
+      const g = groups.get(key);
+      if (g && !g.nickname) g.nickname = nicknameForEmail(myEmail);
     }
 
     const list: LadderRow[] = [...groups.entries()].map(([id, g]) => ({

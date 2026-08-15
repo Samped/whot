@@ -6,7 +6,7 @@ import { encodeFunctionData, type Address, type Hex } from "viem";
 import { toast } from "sonner";
 import { socialAbi } from "@/abi/social";
 import { useGameAccount } from "@/hooks/useGameAccount";
-import { publicRpc, readEmailIdentity, walletFor, writeEmailIdentity } from "@/lib/game-account";
+import { publicRpc, findTableAccountsForEmail, readEmailIdentity, walletFor, writeEmailIdentity } from "@/lib/game-account";
 import { activeChain } from "@/lib/network";
 import {
   displayName,
@@ -62,16 +62,41 @@ export function useSocial() {
     query: { enabled: enabled && signedIn && Boolean(address), refetchInterval: 3_500 },
   });
 
-  const profile = useMemo(
+  const onChainProfile = useMemo(
     () => (profileQuery.data ? parseProfile(profileQuery.data) : emptyProfile()),
     [profileQuery.data],
   );
-
+  const [borrowedProfile, setBorrowedProfile] = useState<PlayerProfile | null>(null);
   const restoredProfile = useRef(false);
 
   useEffect(() => {
     restoredProfile.current = false;
+    setBorrowedProfile(null);
   }, [address, account?.email]);
+
+  const profile = useMemo(() => {
+    if (onChainProfile.set && onChainProfile.nickname) return onChainProfile;
+    if (borrowedProfile?.nickname) {
+      return {
+        ...onChainProfile,
+        nickname: borrowedProfile.nickname,
+        avatar: borrowedProfile.avatar || onChainProfile.avatar,
+        email: borrowedProfile.email || account?.email || onChainProfile.email,
+        set: true,
+      };
+    }
+    const cached = account?.email ? readEmailIdentity(account.email) : null;
+    if (cached?.nickname) {
+      return {
+        ...onChainProfile,
+        nickname: cached.nickname,
+        avatar: Number(cached.avatar || 0),
+        email: account?.email || onChainProfile.email,
+        set: true,
+      };
+    }
+    return onChainProfile;
+  }, [onChainProfile, borrowedProfile, account?.email]);
 
   const invites = useMemo<OpenInvite[]>(() => {
     const raw = invitesQuery.data as
@@ -179,27 +204,74 @@ export function useSocial() {
     [address, account, profileQuery, invitesQuery],
   );
 
-  // If this table seat has no on-chain profile, re-apply the nickname cached
-  // for this email so a CDP address rotation still looks like the same player.
+  // Copy nickname from any linked/old seat onto this address when missing.
   useEffect(() => {
     if (!signedIn || !address || !account?.email || !enabled) return;
-    if (profile.set || restoredProfile.current) return;
-    if (profileQuery.isLoading || profileQuery.isFetching) return;
-    const cached = readEmailIdentity(account.email);
-    if (!cached?.nickname) return;
+    if (onChainProfile.set && onChainProfile.nickname) return;
+    if (restoredProfile.current) return;
+    if (profileQuery.isLoading) return;
+
+    const email = account.email.trim().toLowerCase();
     restoredProfile.current = true;
+
     void (async () => {
       try {
-        await sendTx("setProfile", [
-          cached.nickname!.slice(0, 20),
-          Number(cached.avatar || 0),
-          account.email!.trim().toLowerCase(),
-        ]);
-        writeEmailIdentity(account.email!, {
+        const cached = readEmailIdentity(email);
+        const candidates = new Set<string>();
+        candidates.add(address.toLowerCase());
+        if (cached?.tableAddress) candidates.add(cached.tableAddress.toLowerCase());
+        for (const a of cached?.linkedAddresses || []) candidates.add(a.toLowerCase());
+        for (const rec of findTableAccountsForEmail(email)) {
+          candidates.add(rec.address.toLowerCase());
+        }
+
+        const addrs = [...candidates] as Address[];
+        let source: PlayerProfile | null = null;
+
+        if (addrs.length > 0) {
+          const rows = (await publicRpc().readContract({
+            address: SOCIAL_ADDRESS,
+            abi: socialAbi,
+            functionName: "profilesOf",
+            args: [addrs],
+          })) as unknown[];
+          for (let i = 0; i < addrs.length; i++) {
+            const p = parseProfile(rows[i]);
+            if (!p.set || !p.nickname) continue;
+            const sameMail = (p.email || "").trim().toLowerCase() === email;
+            if (sameMail || !source) source = p;
+            if (sameMail) break;
+          }
+        }
+
+        if (!source?.nickname && cached?.nickname) {
+          source = {
+            nickname: cached.nickname,
+            avatar: Number(cached.avatar || 0),
+            email,
+            set: true,
+          };
+        }
+
+        if (!source?.nickname) {
+          restoredProfile.current = false;
+          return;
+        }
+
+        setBorrowedProfile(source);
+        writeEmailIdentity(email, {
           tableAddress: address,
-          nickname: cached.nickname,
-          avatar: cached.avatar || 0,
+          nickname: source.nickname,
+          avatar: source.avatar,
+          linkedAddresses: addrs,
         });
+
+        // Persist onto the current seat so ranked + invites see the same name.
+        await sendTx("setProfile", [
+          source.nickname.slice(0, 20),
+          Number(source.avatar || 0),
+          email,
+        ]);
       } catch {
         restoredProfile.current = false;
       }
@@ -209,9 +281,9 @@ export function useSocial() {
     address,
     account?.email,
     enabled,
-    profile.set,
+    onChainProfile.set,
+    onChainProfile.nickname,
     profileQuery.isLoading,
-    profileQuery.isFetching,
     sendTx,
   ]);
 
@@ -221,6 +293,7 @@ export function useSocial() {
       if (!nickname) throw new Error("Pick a nickname.");
       const email = next.email.trim().toLowerCase();
       await sendTx("setProfile", [nickname, next.avatar, email]);
+      setBorrowedProfile({ nickname, avatar: next.avatar, email, set: true });
       if (address && email) {
         writeEmailIdentity(email, {
           tableAddress: address,
